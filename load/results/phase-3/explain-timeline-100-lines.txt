@@ -1,0 +1,127 @@
+2026-10-22 13:17:26.481 ASIA [26924] LOG:  duration: 0.029 ms  plan:
+	Query Text: select "id", "key", "name", "plural_name", "description", "kind", "module_key", "header_form_id", "line_form_id", "settings", "is_active", "version" from "app"."doc_type" where "tenant_id" = $1 and "key" = $2
+	Query Parameters: $1 = '01a163b9-a2fb-7271-b8cf-ae8e3557c774', $2 = 'capex'
+	Result  (cost=0.14..8.16 rows=1 width=277) (actual time=0.019..0.020 rows=1 loops=1)
+	  One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	  Buffers: shared hit=2
+	  ->  Index Scan using doc_type_tenant_id_key_key on doc_type  (cost=0.14..8.16 rows=1 width=277) (actual time=0.012..0.012 rows=1 loops=1)
+	        Index Cond: ((tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid) AND (key = 'capex'::text))
+	        Buffers: shared hit=2
+2026-10-22 13:17:26.482 ASIA [26924] LOG:  duration: 0.039 ms  plan:
+	Query Text: select "d"."id", "d"."doc_type_id", "d"."number", "d"."number_series_id", "d"."status_key", "d"."location_node_id", "d"."doc_date", "d"."required_by", "d"."party_id", "d"."currency", "d"."total_amount", "d"."custom", "d"."form_version_id", "d"."line_form_version_id", "d"."is_locked", "d"."submitted_at", "d"."submitted_by", "d"."closed_at", "d"."closed_reason", "d"."cancelled_at", "d"."cancelled_reason", "d"."created_at", "d"."created_by", "d"."updated_at", "d"."version", "d"."is_deleted", l.path::text as "loc_path", "l"."code" as "loc_code", "l"."name" as "loc_name" from "app"."document" as "d" inner join "app"."location_node" as "l" on "l"."id" = "d"."location_node_id" where "d"."tenant_id" = $1 and "d"."id" = $2 and "d"."is_deleted" = $3 and "d"."doc_type_id" = $4
+	Query Parameters: $1 = '01a163b9-a2fb-7271-b8cf-ae8e3557c774', $2 = '01a163bd-03db-7dba-8836-4afcca8513e4', $3 = 'f', $4 = '01a163b9-ad54-7f90-8ba0-57e36cf4d80b'
+	Result  (cost=0.45..16.51 rows=1 width=471) (actual time=0.026..0.028 rows=1 loops=1)
+	  One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	  Buffers: shared hit=5
+	  ->  Nested Loop  (cost=0.45..16.50 rows=1 width=471) (actual time=0.020..0.021 rows=1 loops=1)
+	        Buffers: shared hit=5
+	        ->  Index Scan using document_pkey on document d  (cost=0.29..8.31 rows=1 width=375) (actual time=0.013..0.014 rows=1 loops=1)
+	              Index Cond: (id = '01a163bd-03db-7dba-8836-4afcca8513e4'::uuid)
+	              Filter: ((NOT is_deleted) AND (tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid) AND (doc_type_id = '01a163b9-ad54-7f90-8ba0-57e36cf4d80b'::uuid))
+	              Buffers: shared hit=3
+	        ->  Index Scan using location_node_pkey on location_node l  (cost=0.15..8.17 rows=1 width=112) (actual time=0.006..0.006 rows=1 loops=1)
+	              Index Cond: (id = d.location_node_id)
+	              Filter: (tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	              Buffers: shared hit=2
+2026-10-22 13:17:26.484 ASIA [26924] LOG:  duration: 0.021 ms  plan:
+	Query Text: select "v"."id" from "app"."workflow_def" as "w" inner join "app"."workflow_version" as "v" on "v"."id" = "w"."current_version_id" where "w"."doc_type_id" = $1
+	Query Parameters: $1 = '01a163b9-ad54-7f90-8ba0-57e36cf4d80b'
+	Nested Loop  (cost=0.30..21.71 rows=1 width=16) (actual time=0.019..0.020 rows=1 loops=1)
+	  Buffers: shared hit=4
+	  ->  Index Scan using workflow_def_tenant_id_doc_type_id_key on workflow_def w  (cost=0.16..8.18 rows=1 width=16) (actual time=0.012..0.013 rows=1 loops=1)
+	        Index Cond: ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (doc_type_id = '01a163b9-ad54-7f90-8ba0-57e36cf4d80b'::uuid))
+	        Buffers: shared hit=2
+	  ->  Index Scan using workflow_version_pkey on workflow_version v  (cost=0.15..8.18 rows=1 width=16) (actual time=0.006..0.006 rows=1 loops=1)
+	        Index Cond: (id = w.current_version_id)
+	        Filter: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	        Buffers: shared hit=2
+2026-10-22 13:17:26.486 ASIA [26924] LOG:  duration: 0.022 ms  plan:
+	Query Text: select "id", "version", "definition" from "app"."workflow_version" where "id" = $1
+	Query Parameters: $1 = '01a163b9-af07-7dd8-b4e3-99f21a3ba223'
+	Index Scan using workflow_version_pkey on workflow_version  (cost=0.15..8.18 rows=1 width=52) (actual time=0.008..0.009 rows=1 loops=1)
+	  Index Cond: (id = '01a163b9-af07-7dd8-b4e3-99f21a3ba223'::uuid)
+	  Filter: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	  Buffers: shared hit=2
+2026-10-22 13:17:26.488 ASIA [26924] LOG:  duration: 0.043 ms  plan:
+	Query Text: select "id", "at", "actor_id", "impersonated_by", "action", "before", "after" from "app"."audit_log" where "tenant_id" = $1 and "entity" = $2 and "entity_id" = $3
+	Query Parameters: $1 = '01a163b9-a2fb-7271-b8cf-ae8e3557c774', $2 = 'document', $3 = '01a163bd-03db-7dba-8836-4afcca8513e4'
+	Result  (cost=0.01..7.64 rows=1 width=305) (actual time=0.042..0.042 rows=0 loops=1)
+	  One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	  Buffers: shared read=6 dirtied=1
+	  ->  Seq Scan on audit_log  (cost=0.01..7.64 rows=1 width=305) (actual time=0.040..0.040 rows=0 loops=1)
+	        Filter: ((tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid) AND (entity = 'document'::text) AND (entity_id = '01a163bd-03db-7dba-8836-4afcca8513e4'::text))
+	        Rows Removed by Filter: 99
+	        Buffers: shared read=6 dirtied=1
+2026-10-22 13:17:26.489 ASIA [26924] LOG:  duration: 0.029 ms  plan:
+	Query Text: select "id", "at", "actor_id", "on_behalf_of", "stage_key", "action", "comment", "decisions", "target_stage", "target_user_id" from "app"."wf_action" where "tenant_id" = $1 and "document_id" = $2
+	Query Parameters: $1 = '01a163b9-a2fb-7271-b8cf-ae8e3557c774', $2 = '01a163bd-03db-7dba-8836-4afcca8513e4'
+	Result  (cost=0.41..10.20 rows=2 width=153) (actual time=0.024..0.024 rows=1 loops=1)
+	  One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	  Buffers: shared read=4
+	  ->  Index Scan using wf_action_doc on wf_action  (cost=0.41..10.20 rows=2 width=153) (actual time=0.019..0.019 rows=1 loops=1)
+	        Index Cond: ((tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid) AND (document_id = '01a163bd-03db-7dba-8836-4afcca8513e4'::uuid))
+	        Buffers: shared read=4
+2026-10-22 13:17:26.490 ASIA [26924] LOG:  duration: 0.007 ms  plan:
+	Query Text: select "id", "created_at", "created_by", "body", "is_deleted", "edited_at" from "app"."comment" where "tenant_id" = $1 and "entity_kind" = $2 and "entity_id" = $3
+	Query Parameters: $1 = '01a163b9-a2fb-7271-b8cf-ae8e3557c774', $2 = 'document', $3 = '01a163bd-03db-7dba-8836-4afcca8513e4'
+	Result  (cost=0.15..8.17 rows=1 width=81) (actual time=0.006..0.006 rows=0 loops=1)
+	  One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	  Buffers: shared hit=2
+	  ->  Index Scan using comment_entity on comment  (cost=0.15..8.17 rows=1 width=81) (actual time=0.002..0.002 rows=0 loops=1)
+	        Index Cond: ((tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid) AND (entity_kind = 'document'::text) AND (entity_id = '01a163bd-03db-7dba-8836-4afcca8513e4'::uuid))
+	        Buffers: shared hit=2
+2026-10-22 13:17:26.491 ASIA [26924] LOG:  duration: 0.005 ms  plan:
+	Query Text: select "a"."id", "a"."created_at", "a"."created_by", "a"."note", "a"."is_deleted", "f"."filename" from "app"."attachment" as "a" left join "app"."file_object" as "f" on "f"."id" = "a"."file_id" where "a"."tenant_id" = $1 and "a"."entity_kind" = $2 and "a"."entity_id" = $3
+	Query Parameters: $1 = '01a163b9-a2fb-7271-b8cf-ae8e3557c774', $2 = 'document', $3 = '01a163bd-03db-7dba-8836-4afcca8513e4'
+	Result  (cost=0.31..16.37 rows=1 width=105) (actual time=0.004..0.004 rows=0 loops=1)
+	  One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	  Buffers: shared hit=2
+	  ->  Nested Loop Left Join  (cost=0.31..16.37 rows=1 width=105) (actual time=0.002..0.003 rows=0 loops=1)
+	        Buffers: shared hit=2
+	        ->  Index Scan using attachment_entity on attachment a  (cost=0.15..8.17 rows=1 width=89) (actual time=0.002..0.002 rows=0 loops=1)
+	              Index Cond: ((tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid) AND (entity_kind = 'document'::text) AND (entity_id = '01a163bd-03db-7dba-8836-4afcca8513e4'::uuid))
+	              Buffers: shared hit=2
+	        ->  Index Scan using file_object_pkey on file_object f  (cost=0.15..8.18 rows=1 width=48) (never executed)
+	              Index Cond: (id = a.file_id)
+	              Filter: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+2026-10-22 13:17:26.493 ASIA [26924] LOG:  duration: 0.238 ms  plan:
+	Query Text: 
+	        select coalesce(wf_action_id::text, to_char(date_trunc('second', at), 'YYYY-MM-DD"T"HH24:MI:SS')) as k, event_type, min(at) as at,
+	               min(actor_id::text)::uuid as actor_id, min(reason) as reason, count(distinct line_id)::text as n, sum(qty)::text as total
+	          from app.line_event where tenant_id = $1 and document_id = $2 and wf_action_id is null
+	         group by 1, 2
+	Query Parameters: $1 = '01a163b9-a2fb-7271-b8cf-ae8e3557c774', $2 = '01a163bd-03db-7dba-8836-4afcca8513e4'
+	GroupAggregate  (cost=162.18..167.37 rows=83 width=161) (actual time=0.235..0.236 rows=1 loops=1)
+	  Group Key: (COALESCE((wf_action_id)::text, to_char(date_trunc('second'::text, at), 'YYYY-MM-DD"T"HH24:MI:SS'::text))), event_type
+	  Buffers: shared read=6
+	  ->  Sort  (cost=162.18..162.39 rows=83 width=118) (actual time=0.201..0.205 rows=100 loops=1)
+	        Sort Key: (COALESCE((wf_action_id)::text, to_char(date_trunc('second'::text, at), 'YYYY-MM-DD"T"HH24:MI:SS'::text))), event_type, line_id
+	        Sort Method: quicksort  Memory: 35kB
+	        Buffers: shared read=6
+	        ->  Result  (cost=0.42..159.54 rows=83 width=118) (actual time=0.072..0.131 rows=100 loops=1)
+	              One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	              Buffers: shared read=6
+	              ->  Index Scan using line_event_doc on line_event  (cost=0.42..158.71 rows=83 width=102) (actual time=0.020..0.039 rows=100 loops=1)
+	                    Index Cond: ((tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid) AND (document_id = '01a163bd-03db-7dba-8836-4afcca8513e4'::uuid))
+	                    Filter: (wf_action_id IS NULL)
+	                    Buffers: shared read=6
+2026-10-22 13:17:26.495 ASIA [26924] LOG:  duration: 0.060 ms  plan:
+	Query Text: select "id", "line_no" from "app"."document_line" where "tenant_id" = $1 and "document_id" = $2
+	Query Parameters: $1 = '01a163b9-a2fb-7271-b8cf-ae8e3557c774', $2 = '01a163bd-03db-7dba-8836-4afcca8513e4'
+	Result  (cost=0.42..375.42 rows=200 width=20) (actual time=0.018..0.041 rows=100 loops=1)
+	  One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	  Buffers: shared hit=7
+	  ->  Index Scan using document_line_doc on document_line  (cost=0.42..375.42 rows=200 width=20) (actual time=0.014..0.026 rows=100 loops=1)
+	        Index Cond: ((tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid) AND (document_id = '01a163bd-03db-7dba-8836-4afcca8513e4'::uuid))
+	        Buffers: shared hit=7
+2026-10-22 13:17:26.496 ASIA [26924] LOG:  duration: 0.018 ms  plan:
+	Query Text: select "id", "name" from "app"."tenant_user" where "tenant_id" = $1 and "id" in ($2)
+	Query Parameters: $1 = '01a163b9-a2fb-7271-b8cf-ae8e3557c774', $2 = '01a163b9-a536-74cb-97a8-bbd70113db21'
+	Result  (cost=0.14..8.16 rows=1 width=48) (actual time=0.016..0.017 rows=1 loops=1)
+	  One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	  Buffers: shared hit=2
+	  ->  Index Scan using tenant_user_tenant_id_email_key on tenant_user  (cost=0.14..8.16 rows=1 width=48) (actual time=0.012..0.012 rows=1 loops=1)
+	        Index Cond: (tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	        Filter: (id = '01a163b9-a536-74cb-97a8-bbd70113db21'::uuid)
+	        Rows Removed by Filter: 2
+	        Buffers: shared hit=2

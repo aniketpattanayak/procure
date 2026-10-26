@@ -1,0 +1,23 @@
+-- options-q-cascade
+-- select r.id, r.code, r.name, r.is_active, r.data from app.master_record as r where r.tenant_id = $1 and r.master_id = $2 and r.is_deleted = false and r.data @> $3::jsonb and r.is_active = true and (r.search @@ to_tsquery('simple', $4) or lower(r.name) like $5) order by r.name, r.id limit 30
+-- params: ["01a16303-2191-75eb-9381-4403e879c0f4","01a16303-21f3-7740-aa98-a8c35bd3186d","{\"category\":\"01a16303-2244-7d22-81f3-4eb78af98c98\"}","steel:*","steel%"]
+
+Limit  (cost=7501.83..7501.86 rows=11 width=317) (actual time=16.890..16.895 rows=30 loops=1)
+  Output: id, code, name, is_active, data
+  Buffers: shared hit=6257
+  ->  Sort  (cost=7501.83..7501.86 rows=11 width=317) (actual time=16.889..16.891 rows=30 loops=1)
+        Output: id, code, name, is_active, data
+        Sort Key: r.name, r.id
+        Sort Method: top-N heapsort  Memory: 49kB
+        Buffers: shared hit=6257
+        ->  Result  (cost=0.01..7501.64 rows=11 width=317) (actual time=2.548..16.700 rows=478 loops=1)
+              Output: id, code, name, is_active, data
+              One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a16303-2191-75eb-9381-4403e879c0f4'::uuid)
+              Buffers: shared hit=6251
+              ->  Seq Scan on app.master_record r  (cost=0.01..7501.64 rows=11 width=317) (actual time=2.544..16.652 rows=478 loops=1)
+                    Output: id, tenant_id, master_id, code, name, is_active, data, form_version_id, search, created_at, created_by, updated_at, updated_by, version, is_deleted, deleted_reason
+                    Filter: ((NOT r.is_deleted) AND r.is_active AND (r.tenant_id = '01a16303-2191-75eb-9381-4403e879c0f4'::uuid) AND (r.master_id = '01a16303-21f3-7740-aa98-a8c35bd3186d'::uuid) AND (r.data @> '{"category": "01a16303-2244-7d22-81f3-4eb78af98c98"}'::jsonb) AND ((r.search @@ '''steel'':*'::tsquery) OR (lower(r.name) ~~ 'steel%'::text)))
+                    Rows Removed by Filter: 49547
+                    Buffers: shared hit=6251
+Planning Time: 0.130 ms
+Execution Time: 16.914 ms

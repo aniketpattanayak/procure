@@ -1,0 +1,30 @@
+{
+  "label": "baseline",
+  "loadAvg": "2.66 2.70 3.12",
+  "out": {
+    "selectable lines (admin)": {
+      "status": 200,
+      "n": 10,
+      "p50": 1806.3,
+      "p95": 1935.8,
+      "max": 1935.8,
+      "min": 1719.5
+    },
+    "selectable lines search": {
+      "status": 200,
+      "n": 10,
+      "p50": 1259.9,
+      "p95": 1488.8,
+      "max": 1488.8,
+      "min": 1135.1
+    },
+    "selectable lines search (no match)": {
+      "status": 200,
+      "n": 10,
+      "p50": 1076.4,
+      "p95": 1306.8,
+      "max": 1306.8,
+      "min": 969
+    }
+  }
+}

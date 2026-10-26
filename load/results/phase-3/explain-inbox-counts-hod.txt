@@ -1,0 +1,179 @@
+2026-10-22 13:17:24.881 ASIA [26924] LOG:  duration: 0.026 ms  plan:
+	Query Text: select "ur"."role_id" from "app"."user_role" as "ur" inner join "app"."role" as "r" on "r"."id" = "ur"."role_id" where "ur"."user_id" = $1 and "r"."is_deleted" = $2
+	Query Parameters: $1 = '01a163b9-ae1b-7be2-bd13-eaa54c1b4d39', $2 = 'f'
+	Nested Loop  (cost=4.34..17.73 rows=1 width=16) (actual time=0.024..0.025 rows=1 loops=1)
+	  Join Filter: (ur.role_id = r.id)
+	  Rows Removed by Join Filter: 4
+	  Buffers: shared hit=4
+	  ->  Index Only Scan using user_role_pkey on user_role ur  (cost=0.16..8.18 rows=1 width=16) (actual time=0.014..0.015 rows=1 loops=1)
+	        Index Cond: ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (user_id = '01a163b9-ae1b-7be2-bd13-eaa54c1b4d39'::uuid))
+	        Heap Fetches: 1
+	        Buffers: shared hit=2
+	  ->  Bitmap Heap Scan on role r  (cost=4.17..9.53 rows=1 width=16) (actual time=0.007..0.007 rows=5 loops=1)
+	        Recheck Cond: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	        Filter: (NOT is_deleted)
+	        Heap Blocks: exact=1
+	        Buffers: shared hit=2
+	        ->  Bitmap Index Scan on role_tenant_id_key_key  (cost=0.00..4.17 rows=2 width=0) (actual time=0.003..0.003 rows=6 loops=1)
+	              Index Cond: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	              Buffers: shared hit=1
+2026-10-22 13:17:24.898 ASIA [26924] LOG:  duration: 11.833 ms  plan:
+	Query Text: 
+	        select v.id, v.definition, dt.key from app.workflow_version v
+	        join app.workflow_def w on w.id = v.workflow_id join app.doc_type dt on dt.id = w.doc_type_id
+	        where dt.key = any($1::text[])
+	          and v.id in (select distinct workflow_version_id from app.wf_instance where status = 'running')
+	Query Parameters: $1 = '{capex}'
+	Nested Loop  (cost=835.05..853.85 rows=1 width=80) (actual time=11.803..11.814 rows=1 loops=1)
+	  Join Filter: (v.id = wf_instance.workflow_version_id)
+	  Buffers: shared hit=335
+	  ->  Nested Loop  (cost=8.49..27.27 rows=1 width=80) (actual time=0.029..0.038 rows=1 loops=1)
+	        Buffers: shared hit=6
+	        ->  Nested Loop  (cost=4.33..17.73 rows=1 width=48) (actual time=0.023..0.028 rows=1 loops=1)
+	              Join Filter: (w.doc_type_id = dt.id)
+	              Buffers: shared hit=4
+	              ->  Index Scan using doc_type_tenant_id_key_key on doc_type dt  (cost=0.15..8.17 rows=1 width=48) (actual time=0.015..0.018 rows=1 loops=1)
+	                    Index Cond: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	                    Filter: (key = ANY ('{capex}'::text[]))
+	                    Buffers: shared hit=2
+	              ->  Bitmap Heap Scan on workflow_def w  (cost=4.17..9.53 rows=2 width=32) (actual time=0.006..0.007 rows=1 loops=1)
+	                    Recheck Cond: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	                    Heap Blocks: exact=1
+	                    Buffers: shared hit=2
+	                    ->  Bitmap Index Scan on workflow_def_tenant_id_doc_type_id_key  (cost=0.00..4.17 rows=2 width=0) (actual time=0.003..0.003 rows=1 loops=1)
+	                          Index Cond: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	                          Buffers: shared hit=1
+	        ->  Bitmap Heap Scan on workflow_version v  (cost=4.16..9.53 rows=1 width=64) (actual time=0.006..0.009 rows=1 loops=1)
+	              Recheck Cond: (workflow_id = w.id)
+	              Filter: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	              Heap Blocks: exact=1
+	              Buffers: shared hit=2
+	              ->  Bitmap Index Scan on workflow_version_workflow_id_version_key  (cost=0.00..4.16 rows=2 width=0) (actual time=0.002..0.002 rows=1 loops=1)
+	                    Index Cond: (workflow_id = w.id)
+	                    Buffers: shared hit=1
+	  ->  HashAggregate  (cost=826.55..826.56 rows=1 width=16) (actual time=11.771..11.771 rows=1 loops=1)
+	        Group Key: wf_instance.workflow_version_id
+	        Batches: 1  Memory Usage: 24kB
+	        Buffers: shared hit=329
+	        ->  Seq Scan on wf_instance  (cost=0.00..804.05 rows=9002 width=16) (actual time=0.004..6.720 rows=9002 loops=1)
+	              Filter: ((status = 'running'::text) AND (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid))
+	              Rows Removed by Filter: 10000
+	              Buffers: shared hit=329
+2026-10-22 13:17:25.108 ASIA [26924] LOG:  duration: 207.945 ms  plan:
+	Query Text: 
+	      with 
+	      cand as (
+	        select ss.instance_id, ss.stage_key, 'rule'::text as because, 0 as pri
+	        from app.wf_stage_state ss
+	        join app.wf_instance i on i.id = ss.instance_id and i.status = 'running'
+	        join app.document d on d.id = i.document_id and not d.is_deleted
+	        join app.location_node loc on loc.id = d.location_node_id
+	        where ss.status = 'active' and ((i.workflow_version_id = $1 and ss.stage_key = $2 and true and d.submitted_by is distinct from $3::uuid and "loc"."path" <@ ANY($4::ltree[])))
+	        union all
+	        select a.instance_id, a.stage_key, a.reason as because, 1 as pri
+	        from app.wf_assignment a
+	        join app.wf_stage_state ss on ss.instance_id = a.instance_id and ss.stage_key = a.stage_key and ss.status = 'active'
+	        join app.wf_instance i on i.id = a.instance_id and i.status = 'running'
+	        where a.user_id = $5 and a.is_active
+	      ),
+	      best as (
+	        select distinct on (instance_id, stage_key) instance_id, stage_key, because from cand order by instance_id, stage_key, pri, because
+	      )
+	      select dt.key, dt.name, b.stage_key, max(i.workflow_version_id::text) as version_id, count(*) as n,
+	        count(*) filter (where ss.due_at < $6) as overdue
+	      from best b
+	      join app.wf_stage_state ss on ss.instance_id = b.instance_id and ss.stage_key = b.stage_key
+	      join app.wf_instance i on i.id = b.instance_id
+	      join app.document d on d.id = i.document_id
+	      join app.doc_type dt on dt.id = d.doc_type_id
+	      group by dt.key, dt.name, b.stage_key
+	      order by dt.name, b.stage_key
+	Query Parameters: $1 = '01a163b9-af07-7dd8-b4e3-99f21a3ba223', $2 = 'hod', $3 = '01a163b9-ae1b-7be2-bd13-eaa54c1b4d39', $4 = '{n01a163b9a4ac72cbaccc6947bac34470}', $5 = '01a163b9-ae1b-7be2-bd13-eaa54c1b4d39', $6 = '2026-10-22 13:17:24.894+00'
+	GroupAggregate  (cost=2030.04..2030.08 rows=1 width=123) (actual time=207.920..207.935 rows=1 loops=1)
+	  Group Key: dt.name, ss_1.stage_key, dt.key
+	  Buffers: shared hit=95376
+	  ->  Sort  (cost=2030.04..2030.05 rows=1 width=99) (actual time=199.089..199.290 rows=4202 loops=1)
+	        Sort Key: dt.name, ss_1.stage_key, dt.key
+	        Sort Method: quicksort  Memory: 488kB
+	        Buffers: shared hit=95376
+	        ->  Nested Loop  (cost=1976.88..2030.03 rows=1 width=99) (actual time=142.351..198.339 rows=4202 loops=1)
+	              Buffers: shared hit=95376
+	              ->  Nested Loop  (cost=1976.72..2029.67 rows=3 width=51) (actual time=142.336..197.126 rows=4202 loops=1)
+	                    Buffers: shared hit=95374
+	                    ->  Nested Loop  (cost=1976.44..2027.60 rows=3 width=51) (actual time=142.317..191.202 rows=4202 loops=1)
+	                          Buffers: shared hit=82768
+	                          ->  Nested Loop  (cost=1976.15..2026.51 rows=3 width=51) (actual time=142.307..175.687 rows=4202 loops=1)
+	                                Buffers: shared hit=70162
+	                                ->  Unique  (cost=1975.72..1975.77 rows=6 width=63) (actual time=142.297..143.189 rows=4202 loops=1)
+	                                      Buffers: shared hit=53354
+	                                      ->  Sort  (cost=1975.72..1975.74 rows=6 width=63) (actual time=142.296..142.637 rows=4202 loops=1)
+	                                            Sort Key: ss_1.instance_id, ss_1.stage_key, (0), ('rule'::text)
+	                                            Sort Method: quicksort  Memory: 422kB
+	                                            Buffers: shared hit=53354
+	                                            ->  Append  (cost=112.78..1975.65 rows=6 width=63) (actual time=0.201..141.557 rows=4202 loops=1)
+	                                                  Buffers: shared hit=53354
+	                                                  ->  Nested Loop  (cost=112.78..1958.41 rows=5 width=59) (actual time=0.201..141.233 rows=4202 loops=1)
+	                                                        Buffers: shared hit=53352
+	                                                        ->  Nested Loop  (cost=112.36..1911.79 rows=30 width=16) (actual time=0.191..116.669 rows=5402 loops=1)
+	                                                              Buffers: shared hit=31744
+	                                                              ->  Nested Loop  (cost=112.06..1873.45 rows=97 width=16) (actual time=0.182..42.387 rows=12003 loops=1)
+	                                                                    Buffers: shared hit=2336
+	                                                                    ->  Bitmap Heap Scan on location_node loc  (cost=4.17..9.54 rows=1 width=16) (actual time=0.014..0.029 rows=4 loops=1)
+	                                                                          Recheck Cond: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	                                                                          Filter: (path <@ ANY ('{n01a163b9a4ac72cbaccc6947bac34470}'::ltree[]))
+	                                                                          Rows Removed by Filter: 2
+	                                                                          Heap Blocks: exact=1
+	                                                                          Buffers: shared hit=2
+	                                                                          ->  Bitmap Index Scan on location_node_parent  (cost=0.00..4.17 rows=2 width=0) (actual time=0.007..0.007 rows=6 loops=1)
+	                                                                                Index Cond: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	                                                                                Buffers: shared hit=1
+	                                                                    ->  Bitmap Heap Scan on document d_1  (cost=107.89..1805.78 rows=5814 width=32) (actual time=0.125..7.543 rows=3001 loops=4)
+	                                                                          Recheck Cond: ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (loc.id = location_node_id))
+	                                                                          Filter: ((NOT is_deleted) AND (submitted_by IS DISTINCT FROM '01a163b9-ae1b-7be2-bd13-eaa54c1b4d39'::uuid))
+	                                                                          Heap Blocks: exact=2314
+	                                                                          Buffers: shared hit=2334
+	                                                                          ->  Bitmap Index Scan on document_location  (cost=0.00..106.44 rows=5814 width=0) (actual time=0.076..0.076 rows=3001 loops=4)
+	                                                                                Index Cond: ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (location_node_id = loc.id))
+	                                                                                Buffers: shared hit=20
+	                                                              ->  Index Scan using wf_instance_running on wf_instance i_1  (cost=0.29..0.39 rows=1 width=32) (actual time=0.005..0.005 rows=0 loops=12003)
+	                                                                    Index Cond: ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (document_id = d_1.id))
+	                                                                    Filter: (workflow_version_id = '01a163b9-af07-7dd8-b4e3-99f21a3ba223'::uuid)
+	                                                                    Buffers: shared hit=29408
+	                                                        ->  Index Scan using wf_stage_state_pkey on wf_stage_state ss_1  (cost=0.42..1.55 rows=1 width=23) (actual time=0.003..0.003 rows=1 loops=5402)
+	                                                              Index Cond: ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (instance_id = i_1.id) AND (stage_key = 'hod'::text))
+	                                                              Filter: (status = 'active'::text)
+	                                                              Rows Removed by Filter: 0
+	                                                              Buffers: shared hit=21608
+	                                                  ->  Nested Loop  (cost=0.85..17.20 rows=1 width=84) (actual time=0.008..0.011 rows=0 loops=1)
+	                                                        Buffers: shared hit=2
+	                                                        ->  Nested Loop  (cost=0.56..16.61 rows=1 width=96) (actual time=0.007..0.009 rows=0 loops=1)
+	                                                              Buffers: shared hit=2
+	                                                              ->  Index Scan using wf_assignment_user on wf_assignment a  (cost=0.14..8.15 rows=1 width=80) (actual time=0.007..0.007 rows=0 loops=1)
+	                                                                    Index Cond: ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (user_id = '01a163b9-ae1b-7be2-bd13-eaa54c1b4d39'::uuid))
+	                                                                    Buffers: shared hit=2
+	                                                              ->  Index Scan using wf_stage_state_pkey on wf_stage_state ss_2  (cost=0.42..8.45 rows=1 width=23) (never executed)
+	                                                                    Index Cond: ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (instance_id = a.instance_id) AND (stage_key = a.stage_key))
+	                                                                    Filter: (status = 'active'::text)
+	                                                        ->  Index Scan using wf_instance_pkey on wf_instance i_2  (cost=0.29..0.60 rows=1 width=16) (never executed)
+	                                                              Index Cond: (id = ss_2.instance_id)
+	                                                              Filter: ((status = 'running'::text) AND (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid))
+	                                ->  Index Scan using wf_stage_state_pkey on wf_stage_state ss  (cost=0.42..8.45 rows=1 width=31) (actual time=0.003..0.003 rows=1 loops=4202)
+	                                      Index Cond: ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (instance_id = ss_1.instance_id) AND (stage_key = ss_1.stage_key))
+	                                      Buffers: shared hit=16808
+	                          ->  Index Scan using wf_instance_pkey on wf_instance i  (cost=0.29..0.36 rows=1 width=48) (actual time=0.003..0.003 rows=1 loops=4202)
+	                                Index Cond: (id = ss.instance_id)
+	                                Filter: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	                                Buffers: shared hit=12606
+	                    ->  Index Scan using document_pkey on document d  (cost=0.29..0.69 rows=1 width=32) (actual time=0.001..0.001 rows=1 loops=4202)
+	                          Index Cond: (id = i.document_id)
+	                          Filter: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	                          Buffers: shared hit=12606
+	              ->  Memoize  (cost=0.15..0.19 rows=1 width=80) (actual time=0.000..0.000 rows=1 loops=4202)
+	                    Cache Key: d.doc_type_id
+	                    Cache Mode: logical
+	                    Hits: 4201  Misses: 1  Evictions: 0  Overflows: 0  Memory Usage: 1kB
+	                    Buffers: shared hit=2
+	                    ->  Index Scan using doc_type_pkey on doc_type dt  (cost=0.14..0.18 rows=1 width=80) (actual time=0.008..0.008 rows=1 loops=1)
+	                          Index Cond: (id = d.doc_type_id)
+	                          Filter: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	                          Buffers: shared hit=2

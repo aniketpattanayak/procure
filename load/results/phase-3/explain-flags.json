@@ -1,0 +1,69 @@
+[
+  {
+    "scenario": "doc-list-first-page",
+    "seqScans": [
+      "Seq Scan on document, Seq Scan on wf_stage_state"
+    ]
+  },
+  {
+    "scenario": "doc-list-page-2 (cursor)",
+    "seqScans": [
+      "Seq Scan on document, Seq Scan on wf_stage_state"
+    ]
+  },
+  {
+    "scenario": "doc-list-status-approved",
+    "seqScans": [
+      "Seq Scan on document"
+    ]
+  },
+  {
+    "scenario": "doc-list-q-number",
+    "seqScans": [
+      "Seq Scan on location_node, Seq Scan on document"
+    ]
+  },
+  {
+    "scenario": "item-list-status-waiting_hod",
+    "seqScans": [
+      "Seq Scan on document, Seq Scan on master_record, Seq Scan on master_record"
+    ]
+  },
+  {
+    "scenario": "item-list-status-page-2",
+    "seqScans": [
+      "Seq Scan on document, Seq Scan on master_record, Seq Scan on master_record"
+    ]
+  },
+  {
+    "scenario": "counts-admin",
+    "seqScans": [
+      "Seq Scan on document"
+    ]
+  },
+  {
+    "scenario": "inbox-hod",
+    "seqScans": [
+      "Seq Scan on wf_instance"
+    ]
+  },
+  {
+    "scenario": "inbox-counts-hod",
+    "seqScans": [
+      "Seq Scan on wf_instance"
+    ]
+  },
+  {
+    "scenario": "inbox-admin",
+    "seqScans": [
+      "Seq Scan on wf_instance",
+      "Seq Scan on document"
+    ]
+  },
+  {
+    "scenario": "detail-100-lines",
+    "seqScans": [
+      "Seq Scan on wf_instance"
+    ]
+  }
+]

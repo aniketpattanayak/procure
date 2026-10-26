@@ -1,0 +1,18 @@
+packages:
+  - apps/*
+  - packages/*
+
+onlyBuiltDependencies:
+  - '@nestjs/core'
+  - '@node-rs/argon2'
+  - '@swc/core'
+  - esbuild
+  - msgpackr-extract
+
+overrides:
+  body-parser@<1.20.6: ^1.20.9
+  fast-xml-parser@>=4 <4.5.5: ^4.5.7
+  multer@<2.3.0: ^2.5.0
+  next>sharp: 0.35.5
+  postcss@<8.5.23: ^8.5.31
+  qs@<6.16.0: ^6.16.1

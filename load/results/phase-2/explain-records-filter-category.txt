@@ -1,0 +1,19 @@
+-- records-filter-category
+-- select r.id, r.master_id, r.code, r.name, r.is_active, r.data, r.form_version_id, r.created_at, r.updated_at, r.version, (r.name)::text as sort_value from app.master_record as r where r.tenant_id = $1 and r.master_id = $2 and r.is_deleted = false and r.is_active = true and r.data @> $3::jsonb order by r.name asc, r.id asc limit 51
+-- params: ["01a16303-2191-75eb-9381-4403e879c0f4","01a16303-21f3-7740-aa98-a8c35bd3186d","{\"category\":\"01a16303-2244-7d22-81f3-4eb78af98c98\"}"]
+
+Limit  (cost=0.41..2268.24 rows=51 width=386) (actual time=1.274..3.978 rows=51 loops=1)
+  Output: id, master_id, code, name, is_active, data, form_version_id, created_at, updated_at, version, name
+  Buffers: shared hit=5182
+  ->  Result  (cost=0.41..20010.63 rows=450 width=386) (actual time=1.273..3.973 rows=51 loops=1)
+        Output: id, master_id, code, name, is_active, data, form_version_id, created_at, updated_at, version, name
+        One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a16303-2191-75eb-9381-4403e879c0f4'::uuid)
+        Buffers: shared hit=5182
+        ->  Index Scan using master_record_list on app.master_record r  (cost=0.41..20010.63 rows=450 width=369) (actual time=1.267..3.959 rows=51 loops=1)
+              Output: id, tenant_id, master_id, code, name, is_active, data, form_version_id, search, created_at, created_by, updated_at, updated_by, version, is_deleted, deleted_reason
+              Index Cond: ((r.tenant_id = '01a16303-2191-75eb-9381-4403e879c0f4'::uuid) AND (r.master_id = '01a16303-21f3-7740-aa98-a8c35bd3186d'::uuid) AND (r.is_active = true))
+              Filter: (r.data @> '{"category": "01a16303-2244-7d22-81f3-4eb78af98c98"}'::jsonb)
+              Rows Removed by Filter: 5001
+              Buffers: shared hit=5182
+Planning Time: 0.169 ms
+Execution Time: 4.001 ms

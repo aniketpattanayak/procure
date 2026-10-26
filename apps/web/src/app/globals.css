@@ -1,0 +1,11 @@
+@import '@fontsource-variable/inter/index.css';
+@import '@procure/ui/styles.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { border-color: rgb(var(--c-border)); }
+  h1, h2, h3 { letter-spacing: -0.011em; }
+}

@@ -1,0 +1,25 @@
+-- records-sort-std_rate
+-- select r.id, r.master_id, r.code, r.name, r.is_active, r.data, r.form_version_id, r.created_at, r.updated_at, r.version, (coalesce((r.data->>'std_rate')::numeric, 0))::text as sort_value from app.master_record as r where r.tenant_id = $1 and r.master_id = $2 and r.is_deleted = false and r.is_active = true order by coalesce((r.data->>'std_rate')::numeric, 0) desc, r.id desc limit 51
+-- params: ["01a16303-2191-75eb-9381-4403e879c0f4","01a16303-21f3-7740-aa98-a8c35bd3186d"]
+
+Limit  (cost=9402.52..9402.65 rows=51 width=433) (actual time=39.863..39.870 rows=51 loops=1)
+  Output: id, master_id, code, name, is_active, data, form_version_id, created_at, updated_at, version, ((COALESCE(((data ->> 'std_rate'::text))::numeric, '0'::numeric))::text), (COALESCE(((data ->> 'std_rate'::text))::numeric, '0'::numeric))
+  Buffers: shared hit=6254
+  ->  Sort  (cost=9402.52..9515.02 rows=44997 width=433) (actual time=39.862..39.865 rows=51 loops=1)
+        Output: id, master_id, code, name, is_active, data, form_version_id, created_at, updated_at, version, ((COALESCE(((data ->> 'std_rate'::text))::numeric, '0'::numeric))::text), (COALESCE(((data ->> 'std_rate'::text))::numeric, '0'::numeric))
+        Sort Key: (COALESCE(((r.data ->> 'std_rate'::text))::numeric, '0'::numeric)) DESC, r.id DESC
+        Sort Method: top-N heapsort  Memory: 77kB
+        Buffers: shared hit=6254
+        ->  Result  (cost=0.01..7901.33 rows=44997 width=433) (actual time=0.013..27.661 rows=45004 loops=1)
+              Output: id, master_id, code, name, is_active, data, form_version_id, created_at, updated_at, version, (COALESCE(((data ->> 'std_rate'::text))::numeric, '0'::numeric))::text, COALESCE(((data ->> 'std_rate'::text))::numeric, '0'::numeric)
+              One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a16303-2191-75eb-9381-4403e879c0f4'::uuid)
+              Buffers: shared hit=6251
+              ->  Seq Scan on app.master_record r  (cost=0.01..7001.39 rows=44997 width=369) (actual time=0.005..11.141 rows=45004 loops=1)
+                    Output: id, tenant_id, master_id, code, name, is_active, data, form_version_id, search, created_at, created_by, updated_at, updated_by, version, is_deleted, deleted_reason
+                    Filter: ((NOT r.is_deleted) AND r.is_active AND (r.tenant_id = '01a16303-2191-75eb-9381-4403e879c0f4'::uuid) AND (r.master_id = '01a16303-21f3-7740-aa98-a8c35bd3186d'::uuid))
+                    Rows Removed by Filter: 5021
+                    Buffers: shared hit=6251
+Planning:
+  Buffers: shared hit=24
+Planning Time: 0.136 ms
+Execution Time: 39.896 ms

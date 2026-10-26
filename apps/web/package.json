@@ -1,0 +1,45 @@
+{
+  "name": "@procure/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "node ../../e2e/support/start-web.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "6.18.4",
+    "@codemirror/language": "6.10.8",
+    "@codemirror/lint": "6.8.4",
+    "@codemirror/state": "6.5.2",
+    "@codemirror/view": "6.36.2",
+    "@dnd-kit/core": "6.3.1",
+    "@dnd-kit/sortable": "10.0.0",
+    "@dnd-kit/utilities": "3.2.2",
+    "@fontsource-variable/inter": "5.2.8",
+    "@hookform/resolvers": "5.2.2",
+    "@procure/formula": "workspace:*",
+    "@procure/schema": "workspace:*",
+    "@procure/ui": "workspace:*",
+    "@tanstack/react-query": "5.99.2",
+    "@tanstack/react-table": "8.21.3",
+    "lucide-react": "0.577.0",
+    "next": "15.5.28",
+    "react": "19.1.10",
+    "react-dom": "19.1.10",
+    "react-hook-form": "7.62.0",
+    "recharts": "2.15.4",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "19.1.17",
+    "@types/react-dom": "19.1.11",
+    "autoprefixer": "10.4.21",
+    "postcss": "8.5.6",
+    "tailwindcss": "3.4.19",
+    "typescript": "^5.6.0"
+  }
+}

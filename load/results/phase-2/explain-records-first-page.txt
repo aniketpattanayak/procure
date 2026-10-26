@@ -1,0 +1,19 @@
+-- records-first-page
+-- select r.id, r.master_id, r.code, r.name, r.is_active, r.data, r.form_version_id, r.created_at, r.updated_at, r.version, (r.name)::text as sort_value from app.master_record as r where r.tenant_id = $1 and r.master_id = $2 and r.is_deleted = false and r.is_active = true order by r.name asc, r.id asc limit 51
+-- params: ["01a16303-2191-75eb-9381-4403e879c0f4","01a16303-21f3-7740-aa98-a8c35bd3186d"]
+
+Limit  (cost=0.41..22.97 rows=51 width=386) (actual time=0.039..0.273 rows=51 loops=1)
+  Output: id, master_id, code, name, is_active, data, form_version_id, created_at, updated_at, version, name
+  Buffers: shared hit=55
+  ->  Result  (cost=0.41..19898.14 rows=44997 width=386) (actual time=0.038..0.269 rows=51 loops=1)
+        Output: id, master_id, code, name, is_active, data, form_version_id, created_at, updated_at, version, name
+        One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a16303-2191-75eb-9381-4403e879c0f4'::uuid)
+        Buffers: shared hit=55
+        ->  Index Scan using master_record_list on app.master_record r  (cost=0.41..19898.14 rows=44997 width=369) (actual time=0.032..0.252 rows=51 loops=1)
+              Output: id, tenant_id, master_id, code, name, is_active, data, form_version_id, search, created_at, created_by, updated_at, updated_by, version, is_deleted, deleted_reason
+              Index Cond: ((r.tenant_id = '01a16303-2191-75eb-9381-4403e879c0f4'::uuid) AND (r.master_id = '01a16303-21f3-7740-aa98-a8c35bd3186d'::uuid) AND (r.is_active = true))
+              Buffers: shared hit=55
+Planning:
+  Buffers: shared hit=302
+Planning Time: 0.574 ms
+Execution Time: 0.310 ms

@@ -1,0 +1,12 @@
+{
+  "name": "@procure/test-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dependency-free fixture builder (platform users, plans, tenants, users) for API and E2E tests.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": { "typescript": "^5.6.0", "@types/node": "^22.0.0" }
+}

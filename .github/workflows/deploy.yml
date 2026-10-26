@@ -1,0 +1,156 @@
+name: Deploy
+
+# staging    : manual dispatch (any ref)
+# production : push of a tag v*  (GitHub environment "production" should require reviewers)
+#
+# Configuration lives in GitHub *environment variables* (Settings > Environments > <env> > Variables),
+# not in this file and not in secrets, except where noted:
+#   AWS_REGION                 e.g. ap-south-1
+#   AWS_DEPLOY_ROLE_ARN        IAM role assumed via OIDC (no long-lived keys)
+#   ECR_REGISTRY               <account>.dkr.ecr.ap-south-1.amazonaws.com
+#   ECR_REPO_API / ECR_REPO_WEB / ECR_REPO_WORKER
+#   ECS_CLUSTER                e.g. procure-staging
+#   ECS_SERVICE_API / ECS_SERVICE_WEB / ECS_SERVICE_WORKER
+#   MIGRATE_TASK_DEFINITION    family of the one-off migrate task (api image, cmd node db/migrate.mjs)
+#   MIGRATE_SUBNETS            comma-separated private subnet ids
+#   MIGRATE_SECURITY_GROUPS    comma-separated security group ids
+#   PUBLIC_API_URL             e.g. https://api.staging.example.com/api/v1 (baked into the web build)
+# The migrate task reads DATABASE_MIGRATOR_URL from Secrets Manager via its task definition.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging]
+        default: staging
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-${{ github.event_name == 'push' && 'production' || inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event_name == 'push' && 'production' || inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: ${{ github.event_name == 'push' && 'production' || inputs.environment }}
+    env:
+      IMAGE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/api.Dockerfile
+          push: true
+          tags: |
+            ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPO_API }}:${{ env.IMAGE_TAG }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+          provenance: true
+          sbom: true
+
+      - name: Build and push worker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/worker.Dockerfile
+          push: true
+          build-args: |
+            API_IMAGE=${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPO_API }}:${{ env.IMAGE_TAG }}
+          tags: |
+            ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPO_WORKER }}:${{ env.IMAGE_TAG }}
+
+      - name: Build and push web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/web.Dockerfile
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.PUBLIC_API_URL }}
+          tags: |
+            ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPO_WEB }}:${{ env.IMAGE_TAG }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+          provenance: true
+          sbom: true
+
+      - name: Run database migrations (one-off ECS task)
+        env:
+          CLUSTER: ${{ vars.ECS_CLUSTER }}
+          TASK_FAMILY: ${{ vars.MIGRATE_TASK_DEFINITION }}
+          SUBNETS: ${{ vars.MIGRATE_SUBNETS }}
+          SGS: ${{ vars.MIGRATE_SECURITY_GROUPS }}
+          IMAGE: ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPO_API }}:${{ env.IMAGE_TAG }}
+        run: |
+          set -euo pipefail
+          # Register a revision of the migrate task pointing at the new image.
+          aws ecs describe-task-definition --task-definition "$TASK_FAMILY" --query taskDefinition > td.json
+          jq --arg img "$IMAGE" '.containerDefinitions[0].image = $img
+            | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+            td.json > td-new.json
+          TD_ARN=$(aws ecs register-task-definition --cli-input-json file://td-new.json --query taskDefinition.taskDefinitionArn --output text)
+          TASK_ARN=$(aws ecs run-task --cluster "$CLUSTER" --task-definition "$TD_ARN" --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SGS],assignPublicIp=DISABLED}" \
+            --started-by "gha-${GITHUB_RUN_ID}" --query 'tasks[0].taskArn' --output text)
+          echo "migrate task: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK_ARN"
+          CODE=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK_ARN" --query 'tasks[0].containers[0].exitCode' --output text)
+          echo "migrate exit code: $CODE"
+          test "$CODE" = "0"
+
+      - name: Roll out services
+        env:
+          CLUSTER: ${{ vars.ECS_CLUSTER }}
+          REGISTRY: ${{ vars.ECR_REGISTRY }}
+        run: |
+          set -euo pipefail
+          deploy() { # service repo
+            local svc="$1" img="$REGISTRY/$2:$IMAGE_TAG"
+            local family
+            family=$(aws ecs describe-services --cluster "$CLUSTER" --services "$svc" --query 'services[0].taskDefinition' --output text)
+            aws ecs describe-task-definition --task-definition "$family" --query taskDefinition > "$svc.json"
+            jq --arg img "$img" '.containerDefinitions[0].image = $img
+              | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+              "$svc.json" > "$svc-new.json"
+            local td
+            td=$(aws ecs register-task-definition --cli-input-json "file://$svc-new.json" --query taskDefinition.taskDefinitionArn --output text)
+            aws ecs update-service --cluster "$CLUSTER" --service "$svc" --task-definition "$td" >/dev/null
+            echo "$svc -> $td"
+          }
+          deploy "${{ vars.ECS_SERVICE_API }}" "${{ vars.ECR_REPO_API }}"
+          deploy "${{ vars.ECS_SERVICE_WORKER }}" "${{ vars.ECR_REPO_WORKER }}"
+          deploy "${{ vars.ECS_SERVICE_WEB }}" "${{ vars.ECR_REPO_WEB }}"
+          aws ecs wait services-stable --cluster "$CLUSTER" \
+            --services "${{ vars.ECS_SERVICE_API }}" "${{ vars.ECS_SERVICE_WORKER }}" "${{ vars.ECS_SERVICE_WEB }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Deploy ${{ job.status }}"
+            echo "- environment: \`${{ github.event_name == 'push' && 'production' || inputs.environment }}\`"
+            echo "- image tag: \`${IMAGE_TAG}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

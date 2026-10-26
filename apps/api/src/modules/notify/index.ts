@@ -1,0 +1,23 @@
+/** Public surface of the notify module (Phase 6, ADR-0014). Other modules import only from here. */
+export { NotifyModule } from './notify.module';
+export { TriggerEngine, EFFECT_EVENT, MAINT_QUEUE } from './engine.service';
+export type { EventJob } from './engine.service';
+export { SenderService } from './sender.service';
+export { OutboundService, SEND_QUEUE, SEND_JOB_OPTS, idempotencyKey } from './outbound.service';
+export { WebhooksService, WEBHOOK_QUEUE, WEBHOOK_MAX_ATTEMPTS, WEBHOOK_DISABLE_AFTER, retryDelayMs, httpsTransport } from './webhooks.service';
+export type { Transport, TransportRequest } from './webhooks.service';
+export { RendererRef, FallbackRenderer, substitute } from './renderer';
+export { ProviderStore } from './platform/providers.store';
+export type { ProviderCredentialRow } from './platform/providers.store';
+export { HooksService } from './hooks.service';
+export { MessagesService } from './messages.service';
+export { RulesService, BUILTIN_EVENTS } from './rules.service';
+export { installDefaultRules, DEFAULT_RULE_NAME, STARTER_KEYS } from './defaults';
+export { ProviderError } from './channels/types';
+export { LogEmailAdapter, SmtpEmailAdapter, SesEmailAdapter, buildMime } from './channels/email';
+export { LogWhatsAppAdapter, MetaWhatsAppAdapter, BspWhatsAppAdapter } from './channels/whatsapp';
+export { encryptSecret, decryptSecret } from './util/crypto';
+export { isBlockedIp, vetUrl, SsrfError } from './util/ssrf';
+export { signWebhook, verifyWebhookSignature, verifyMetaSignature } from './util/signature';
+export { verifySnsMessage, snsStringToSign } from './util/sns';
+export { normalisePhone, normaliseAddress, monthPeriod } from './util/address';

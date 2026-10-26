@@ -1,0 +1,39 @@
+{
+  "name": "procure",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "eslint . --max-warnings=0 --cache --cache-location node_modules/.cache/eslint/",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:migrate": "node db/migrate.mjs",
+    "db:seed": "pnpm --filter @procure/api db:seed",
+    "lint:rls": "node db/policies/rls-lint.mjs",
+    "e2e": "playwright test -c e2e/playwright.config.ts",
+    "db:reset": "node db/migrate.mjs --reset",
+    "lint:fix": "eslint . --fix --cache --cache-location node_modules/.cache/eslint/",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "docker:up": "docker compose -f infra/docker-compose.yml up --build -d",
+    "docker:down": "docker compose -f infra/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.11.0",
+    "@eslint/js": "^9.39.5",
+    "@playwright/test": "^1.48.0",
+    "@procure/test-kit": "workspace:*",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^15.15.0",
+    "pg": "^8.13.0",
+    "prettier": "^3.3.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.72.0"
+  }
+}

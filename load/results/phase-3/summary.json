@@ -1,0 +1,136 @@
+{
+  "at": "2026-10-22T13:16:26.168Z",
+  "api": "http://localhost:4391",
+  "data": {
+    "lines": 200103,
+    "docs": 20003
+  },
+  "results": [
+    {
+      "scenario": "doc-list-first-page",
+      "n": 50,
+      "rows": 50,
+      "p50": 191,
+      "p95": 281.1,
+      "max": 385,
+      "ok": true
+    },
+    {
+      "scenario": "doc-list-page-2 (cursor)",
+      "n": 50,
+      "rows": 50,
+      "p50": 194.4,
+      "p95": 347.6,
+      "max": 436,
+      "ok": false
+    },
+    {
+      "scenario": "doc-list-status-approved",
+      "n": 50,
+      "rows": 50,
+      "p50": 86.4,
+      "p95": 128,
+      "max": 314.1,
+      "ok": true
+    },
+    {
+      "scenario": "doc-list-q-number",
+      "n": 50,
+      "rows": 50,
+      "p50": 151.1,
+      "p95": 272,
+      "max": 399.1,
+      "ok": true
+    },
+    {
+      "scenario": "item-list-status-waiting_hod",
+      "n": 50,
+      "rows": 50,
+      "p50": 691,
+      "p95": 1103,
+      "max": 1296.6,
+      "ok": false
+    },
+    {
+      "scenario": "item-list-status-page-2",
+      "n": 50,
+      "rows": 50,
+      "p50": 942.9,
+      "p95": 1195.4,
+      "max": 1328.9,
+      "ok": false
+    },
+    {
+      "scenario": "item-list-scoped-hod",
+      "n": 50,
+      "rows": 50,
+      "p50": 773.8,
+      "p95": 1255.7,
+      "max": 1276.8,
+      "ok": false
+    },
+    {
+      "scenario": "counts-admin",
+      "n": 50,
+      "rows": 10,
+      "p50": 54.1,
+      "p95": 136.8,
+      "max": 176.4,
+      "ok": true
+    },
+    {
+      "scenario": "counts-hod (scoped)",
+      "n": 50,
+      "rows": 7,
+      "p50": 40.1,
+      "p95": 118.2,
+      "max": 143.9,
+      "ok": true
+    },
+    {
+      "scenario": "inbox-hod",
+      "n": 50,
+      "rows": 50,
+      "p50": 315.9,
+      "p95": 492.6,
+      "max": 541.6,
+      "ok": false
+    },
+    {
+      "scenario": "inbox-counts-hod",
+      "n": 50,
+      "rows": 1,
+      "p50": 306.3,
+      "p95": 471.2,
+      "max": 478.6,
+      "ok": false
+    },
+    {
+      "scenario": "inbox-admin",
+      "n": 50,
+      "rows": 0,
+      "p50": 249.1,
+      "p95": 454.3,
+      "max": 579.6,
+      "ok": false
+    },
+    {
+      "scenario": "detail-100-lines",
+      "n": 50,
+      "rows": 100,
+      "p50": 109.8,
+      "p95": 201.2,
+      "max": 427.2,
+      "ok": true
+    },
+    {
+      "scenario": "timeline-100-lines",
+      "n": 50,
+      "rows": 2,
+      "p50": 33.9,
+      "p95": 67.7,
+      "max": 122.3,
+      "ok": true
+    }
+  ]
+}

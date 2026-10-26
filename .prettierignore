@@ -1,0 +1,11 @@
+node_modules
+dist
+.next
+.turbo
+coverage
+pnpm-lock.yaml
+playwright-report
+test-results
+db/migrations
+infra/terraform/**/.terraform
+*.tfstate*

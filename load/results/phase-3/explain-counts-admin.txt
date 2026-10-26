@@ -1,0 +1,112 @@
+2026-10-22 13:17:23.410 ASIA [26924] LOG:  duration: 0.078 ms  plan:
+	Query Text: select "id", "key", "name", "plural_name", "description", "kind", "module_key", "header_form_id", "line_form_id", "settings", "is_active", "version" from "app"."doc_type" where "tenant_id" = $1 and "key" = $2
+	Query Parameters: $1 = '01a163b9-a2fb-7271-b8cf-ae8e3557c774', $2 = 'capex'
+	Result  (cost=0.14..8.16 rows=1 width=277) (actual time=0.066..0.068 rows=1 loops=1)
+	  One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	  Buffers: shared read=2 written=2
+	  ->  Index Scan using doc_type_tenant_id_key_key on doc_type  (cost=0.14..8.16 rows=1 width=277) (actual time=0.059..0.060 rows=1 loops=1)
+	        Index Cond: ((tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid) AND (key = 'capex'::text))
+	        Buffers: shared read=2 written=2
+2026-10-22 13:17:23.411 ASIA [26924] LOG:  duration: 0.113 ms  plan:
+	Query Text: select "id", "key", "name", "kind", "is_system", "current_version_id", "draft", "updated_at", "draft_updated_at", "version" from "app"."form_def" where "tenant_id" = $1 and "id" = $2
+	Query Parameters: $1 = '01a163b9-a2fb-7271-b8cf-ae8e3557c774', $2 = '01a163b9-ad3a-7b9a-a8a2-6cf167db5b7e'
+	Result  (cost=0.15..8.17 rows=1 width=181) (actual time=0.097..0.101 rows=1 loops=1)
+	  One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	  Buffers: shared read=2 written=2
+	  ->  Index Scan using form_def_tenant_id_key_key on form_def  (cost=0.15..8.17 rows=1 width=181) (actual time=0.090..0.093 rows=1 loops=1)
+	        Index Cond: (tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	        Filter: (id = '01a163b9-ad3a-7b9a-a8a2-6cf167db5b7e'::uuid)
+	        Rows Removed by Filter: 9
+	        Buffers: shared read=2 written=2
+2026-10-22 13:17:23.415 ASIA [26924] LOG:  duration: 0.029 ms  plan:
+	Query Text: select "id", "key", "name", "kind", "is_system", "current_version_id", "draft", "updated_at", "draft_updated_at", "version" from "app"."form_def" where "tenant_id" = $1 and "id" = $2
+	Query Parameters: $1 = '01a163b9-a2fb-7271-b8cf-ae8e3557c774', $2 = '01a163b9-ad08-781a-8373-c601af19eba3'
+	Result  (cost=0.15..8.17 rows=1 width=181) (actual time=0.020..0.024 rows=1 loops=1)
+	  One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	  Buffers: shared hit=2
+	  ->  Index Scan using form_def_tenant_id_key_key on form_def  (cost=0.15..8.17 rows=1 width=181) (actual time=0.014..0.018 rows=1 loops=1)
+	        Index Cond: (tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	        Filter: (id = '01a163b9-ad08-781a-8373-c601af19eba3'::uuid)
+	        Rows Removed by Filter: 9
+	        Buffers: shared hit=2
+2026-10-22 13:17:23.423 ASIA [26924] LOG:  duration: 0.184 ms  plan:
+	Query Text: select "id", "definition" from "app"."form_version" where "tenant_id" = $1 and "id" in ($2, $3)
+	Query Parameters: $1 = '01a163b9-a2fb-7271-b8cf-ae8e3557c774', $2 = '01a163b9-ad4b-72b2-9e8d-cffe991ec6ee', $3 = '01a163b9-ad27-7dd7-82ac-fd0d7edd571c'
+	Result  (cost=8.32..13.67 rows=1 width=48) (actual time=0.052..0.064 rows=2 loops=1)
+	  One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	  Buffers: shared hit=1 read=3 written=3
+	  ->  Bitmap Heap Scan on form_version  (cost=8.32..13.67 rows=1 width=48) (actual time=0.048..0.059 rows=2 loops=1)
+	        Recheck Cond: (id = ANY ('{01a163b9-ad4b-72b2-9e8d-cffe991ec6ee,01a163b9-ad27-7dd7-82ac-fd0d7edd571c}'::uuid[]))
+	        Filter: (tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	        Heap Blocks: exact=2
+	        Buffers: shared hit=1 read=3 written=3
+	        ->  Bitmap Index Scan on form_version_pkey  (cost=0.00..8.31 rows=2 width=0) (actual time=0.031..0.032 rows=2 loops=1)
+	              Index Cond: (id = ANY ('{01a163b9-ad4b-72b2-9e8d-cffe991ec6ee,01a163b9-ad27-7dd7-82ac-fd0d7edd571c}'::uuid[]))
+	              Buffers: shared hit=1 read=1 written=1
+2026-10-22 13:17:23.426 ASIA [26924] LOG:  duration: 0.074 ms  plan:
+	Query Text: select "v"."id" from "app"."workflow_def" as "w" inner join "app"."workflow_version" as "v" on "v"."id" = "w"."current_version_id" where "w"."doc_type_id" = $1
+	Query Parameters: $1 = '01a163b9-ad54-7f90-8ba0-57e36cf4d80b'
+	Nested Loop  (cost=0.30..21.71 rows=1 width=16) (actual time=0.070..0.072 rows=1 loops=1)
+	  Buffers: shared hit=2 read=2 written=2
+	  ->  Index Scan using workflow_def_tenant_id_doc_type_id_key on workflow_def w  (cost=0.16..8.18 rows=1 width=16) (actual time=0.061..0.061 rows=1 loops=1)
+	        Index Cond: ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (doc_type_id = '01a163b9-ad54-7f90-8ba0-57e36cf4d80b'::uuid))
+	        Buffers: shared read=2 written=2
+	  ->  Index Scan using workflow_version_pkey on workflow_version v  (cost=0.15..8.18 rows=1 width=16) (actual time=0.008..0.008 rows=1 loops=1)
+	        Index Cond: (id = w.current_version_id)
+	        Filter: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	        Buffers: shared hit=2
+2026-10-22 13:17:23.447 ASIA [26924] LOG:  duration: 0.029 ms  plan:
+	Query Text: select "id", "version", "definition" from "app"."workflow_version" where "id" = $1
+	Query Parameters: $1 = '01a163b9-af07-7dd8-b4e3-99f21a3ba223'
+	Index Scan using workflow_version_pkey on workflow_version  (cost=0.15..8.18 rows=1 width=52) (actual time=0.011..0.011 rows=1 loops=1)
+	  Index Cond: (id = '01a163b9-af07-7dd8-b4e3-99f21a3ba223'::uuid)
+	  Filter: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	  Buffers: shared hit=2
+2026-10-22 13:17:23.449 ASIA [26924] LOG:  duration: 0.026 ms  plan:
+	Query Text: select "v"."id" from "app"."workflow_def" as "w" inner join "app"."workflow_version" as "v" on "v"."id" = "w"."current_version_id" where "w"."doc_type_id" = $1
+	Query Parameters: $1 = '01a163b9-ad54-7f90-8ba0-57e36cf4d80b'
+	Nested Loop  (cost=0.30..21.71 rows=1 width=16) (actual time=0.023..0.024 rows=1 loops=1)
+	  Buffers: shared hit=4
+	  ->  Index Scan using workflow_def_tenant_id_doc_type_id_key on workflow_def w  (cost=0.16..8.18 rows=1 width=16) (actual time=0.016..0.017 rows=1 loops=1)
+	        Index Cond: ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (doc_type_id = '01a163b9-ad54-7f90-8ba0-57e36cf4d80b'::uuid))
+	        Buffers: shared hit=2
+	  ->  Index Scan using workflow_version_pkey on workflow_version v  (cost=0.15..8.18 rows=1 width=16) (actual time=0.006..0.006 rows=1 loops=1)
+	        Index Cond: (id = w.current_version_id)
+	        Filter: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	        Buffers: shared hit=2
+2026-10-22 13:17:23.457 ASIA [26924] LOG:  duration: 0.029 ms  plan:
+	Query Text: select "id", "version", "definition" from "app"."workflow_version" where "id" = $1
+	Query Parameters: $1 = '01a163b9-af07-7dd8-b4e3-99f21a3ba223'
+	Index Scan using workflow_version_pkey on workflow_version  (cost=0.15..8.18 rows=1 width=52) (actual time=0.012..0.013 rows=1 loops=1)
+	  Index Cond: (id = '01a163b9-af07-7dd8-b4e3-99f21a3ba223'::uuid)
+	  Filter: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+	  Buffers: shared hit=2
+2026-10-22 13:17:23.506 ASIA [26924] LOG:  duration: 45.240 ms  plan:
+	Query Text: select "d"."status_key", count(*)::text as "n" from "app"."document" as "d" inner join "app"."location_node" as "loc" on "loc"."id" = "d"."location_node_id" where "d"."tenant_id" = $1 and "d"."doc_type_id" = $2 and "d"."is_deleted" = $3 and "d"."status_key" in ($4, $5, $6, $7, $8, $9, $10, $11, $12, $13) and true group by "d"."status_key"
+	Query Parameters: $1 = '01a163b9-a2fb-7271-b8cf-ae8e3557c774', $2 = '01a163b9-ad54-7f90-8ba0-57e36cf4d80b', $3 = 'f', $4 = 'draft', $5 = 'waiting_hod', $6 = 'waiting_finance', $7 = 'waiting_director', $8 = 'on_hold', $9 = 'partially_approved', $10 = 'approved', $11 = 'rejected', $12 = 'cancelled', $13 = 'closed'
+	GroupAggregate  (cost=2186.55..2187.65 rows=7 width=43) (actual time=43.127..45.232 rows=7 loops=1)
+	  Group Key: d.status_key
+	  Buffers: shared hit=773 read=770 written=112
+	  ->  Sort  (cost=2186.55..2186.88 rows=133 width=11) (actual time=33.219..33.890 rows=20003 loops=1)
+	        Sort Key: d.status_key
+	        Sort Method: quicksort  Memory: 1237kB
+	        Buffers: shared hit=773 read=770 written=112
+	        ->  Result  (cost=9.57..2181.85 rows=133 width=11) (actual time=0.479..31.264 rows=20003 loops=1)
+	              One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	              Buffers: shared hit=773 read=767 written=112
+	              ->  Hash Join  (cost=9.57..2181.85 rows=133 width=11) (actual time=0.474..29.929 rows=20003 loops=1)
+	                    Hash Cond: (d.location_node_id = loc.id)
+	                    Buffers: shared hit=773 read=767 written=112
+	                    ->  Seq Scan on document d  (cost=0.03..2119.39 rows=19883 width=27) (actual time=0.009..16.347 rows=20003 loops=1)
+	                          Filter: ((NOT is_deleted) AND (tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid) AND (doc_type_id = '01a163b9-ad54-7f90-8ba0-57e36cf4d80b'::uuid) AND (status_key = ANY ('{draft,waiting_hod,waiting_finance,waiting_director,on_hold,partially_approved,approved,rejected,cancelled,closed}'::text[])))
+	                          Buffers: shared hit=772 read=766 written=112
+	                    ->  Hash  (cost=9.50..9.50 rows=2 width=16) (actual time=0.028..0.029 rows=6 loops=1)
+	                          Buckets: 1024  Batches: 1  Memory Usage: 9kB
+	                          Buffers: shared hit=1 read=1
+	                          ->  Bitmap Heap Scan on location_node loc  (cost=4.16..9.50 rows=2 width=16) (actual time=0.022..0.024 rows=6 loops=1)
+	                                Recheck Cond: (tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	                                Heap Blocks: exact=1
+	                                Buffers: shared hit=1 read=1
+	                                ->  Bitmap Index Scan on location_node_parent  (cost=0.00..4.16 rows=2 width=0) (actual time=0.015..0.015 rows=6 loops=1)
+	                                      Index Cond: (tenant_id = '01a163b9-a2fb-7271-b8cf-ae8e3557c774'::uuid)
+	                                      Buffers: shared read=1

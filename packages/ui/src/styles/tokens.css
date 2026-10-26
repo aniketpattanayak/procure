@@ -1,0 +1,136 @@
+/*
+ * Procure design tokens.
+ * Colours are space-separated RGB channels so Tailwind can apply alpha: rgb(var(--c-accent) / 0.1).
+ * Light theme is the default; dark applies via [data-theme="dark"] or the OS preference
+ * when the user has not chosen a theme explicitly ([data-theme="light"] pins light).
+ */
+:root {
+  /* Neutrals */
+  --c-bg: 255 255 255;            /* #FFFFFF page */
+  --c-surface: 255 255 255;       /* cards, dialogs */
+  --c-subtle: 246 247 249;        /* #F6F7F9 sidebar, table header, wells */
+  --c-muted: 238 240 243;         /* #EEF0F3 hover, skeleton */
+  --c-border: 223 227 232;        /* #DFE3E8 */
+  --c-border-strong: 196 202 210; /* #C4CAD2 inputs */
+  --c-fg: 31 35 40;               /* #1F2328 primary text (15.8:1 on white) */
+  --c-fg-muted: 87 95 108;        /* #575F6C secondary text (6.6:1) */
+  --c-fg-subtle: 99 107 120;      /* #636B78 placeholders/meta (5.4:1 white, 5.0:1 subtle) */
+
+  /* Accent: calm muted blue */
+  --c-accent: 52 98 150;          /* #346296 (6.4:1 on white) */
+  --c-accent-hover: 42 82 128;    /* #2A5280 */
+  --c-accent-fg: 255 255 255;
+  --c-accent-soft: 234 241 249;   /* #EAF1F9 selected nav, info wells */
+  --c-ring: 52 98 150;
+
+  /* Status */
+  --c-success: 26 112 70;         /* #1A7046 */
+  --c-success-soft: 230 244 236;
+  --c-warning: 138 84 0;          /* #8A5400 amber text (6.0:1 on soft) */
+  --c-warning-bar: 214 140 18;    /* #D68C12 progress fill */
+  --c-warning-soft: 253 243 223;
+  --c-danger: 180 35 24;          /* #B42318 */
+  --c-danger-soft: 253 236 234;
+  --c-neutral-soft: 238 240 243;
+
+  /* Spacing scale (4px base): Tailwind's default scale is used; these name the layout rhythm. */
+  --space-page-x: 1.5rem;
+  --space-page-y: 1.5rem;
+  --sidebar-w: 15rem;
+  --topbar-h: 3.5rem;
+  --banner-h: 0px;
+
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
+
+  --shadow-pop: 0 4px 16px rgb(16 24 40 / 0.08), 0 1px 3px rgb(16 24 40 / 0.06);
+  --font-sans: 'Inter', 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --c-bg: 18 21 26;               /* #12151A */
+  --c-surface: 24 28 34;          /* #181C22 */
+  --c-subtle: 29 33 40;           /* #1D2128 */
+  --c-muted: 38 43 51;            /* #262B33 */
+  --c-border: 46 52 61;           /* #2E343D */
+  --c-border-strong: 68 76 88;
+  --c-fg: 230 233 237;            /* #E6E9ED */
+  --c-fg-muted: 165 173 184;      /* #A5ADB8 */
+  --c-fg-subtle: 138 147 159;     /* #8A939F (5.3:1 on bg) */
+  --c-accent: 125 165 214;        /* #7DA5D6 */
+  --c-accent-hover: 150 185 226;
+  --c-accent-fg: 14 22 33;
+  --c-accent-soft: 31 45 64;
+  --c-ring: 125 165 214;
+  --c-success: 104 199 145;
+  --c-success-soft: 22 50 36;
+  --c-warning: 236 183 92;
+  --c-warning-bar: 222 160 48;
+  --c-warning-soft: 56 42 16;
+  --c-danger: 245 132 120;
+  --c-danger-soft: 62 26 24;
+  --c-neutral-soft: 38 43 51;
+  --shadow-pop: 0 6px 20px rgb(0 0 0 / 0.45);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not([data-theme='dark']) {
+    --c-bg: 18 21 26;
+    --c-surface: 24 28 34;
+    --c-subtle: 29 33 40;
+    --c-muted: 38 43 51;
+    --c-border: 46 52 61;
+    --c-border-strong: 68 76 88;
+    --c-fg: 230 233 237;
+    --c-fg-muted: 165 173 184;
+    --c-fg-subtle: 138 147 159;
+    --c-accent: 125 165 214;
+    --c-accent-hover: 150 185 226;
+    --c-accent-fg: 14 22 33;
+    --c-accent-soft: 31 45 64;
+    --c-ring: 125 165 214;
+    --c-success: 104 199 145;
+    --c-success-soft: 22 50 36;
+    --c-warning: 236 183 92;
+    --c-warning-bar: 222 160 48;
+    --c-warning-soft: 56 42 16;
+    --c-danger: 245 132 120;
+    --c-danger-soft: 62 26 24;
+    --c-neutral-soft: 38 43 51;
+    --shadow-pop: 0 6px 20px rgb(0 0 0 / 0.45);
+    color-scheme: dark;
+  }
+}
+
+html {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+body {
+  background: rgb(var(--c-bg));
+  color: rgb(var(--c-fg));
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--c-ring));
+  outline-offset: 2px;
+}
+
+.tabular { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

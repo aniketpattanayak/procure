@@ -1,0 +1,21 @@
+-- records-q-search
+-- select r.id, r.master_id, r.code, r.name, r.is_active, r.data, r.form_version_id, r.created_at, r.updated_at, r.version, (r.name)::text as sort_value from app.master_record as r where r.tenant_id = $1 and r.master_id = $2 and r.is_deleted = false and r.is_active = true and (r.search @@ to_tsquery('simple', $3) or lower(r.name) like $4) order by r.name asc, r.id asc limit 51
+-- params: ["01a16303-2191-75eb-9381-4403e879c0f4","01a16303-21f3-7740-aa98-a8c35bd3186d","bolt:*","bolt%"]
+
+Limit  (cost=0.41..921.84 rows=51 width=386) (actual time=4.190..4.261 rows=51 loops=1)
+  Output: id, master_id, code, name, is_active, data, form_version_id, created_at, updated_at, version, name
+  Buffers: shared hit=1764
+  ->  Result  (cost=0.41..20235.62 rows=1120 width=386) (actual time=4.189..4.255 rows=51 loops=1)
+        Output: id, master_id, code, name, is_active, data, form_version_id, created_at, updated_at, version, name
+        One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a16303-2191-75eb-9381-4403e879c0f4'::uuid)
+        Buffers: shared hit=1764
+        ->  Index Scan using master_record_list on app.master_record r  (cost=0.41..20235.62 rows=1120 width=369) (actual time=4.184..4.244 rows=51 loops=1)
+              Output: id, tenant_id, master_id, code, name, is_active, data, form_version_id, search, created_at, created_by, updated_at, updated_by, version, is_deleted, deleted_reason
+              Index Cond: ((r.tenant_id = '01a16303-2191-75eb-9381-4403e879c0f4'::uuid) AND (r.master_id = '01a16303-21f3-7740-aa98-a8c35bd3186d'::uuid) AND (r.is_active = true))
+              Filter: ((r.search @@ '''bolt'':*'::tsquery) OR (lower(r.name) ~~ 'bolt%'::text))
+              Rows Removed by Filter: 1668
+              Buffers: shared hit=1764
+Planning:
+  Buffers: shared hit=22
+Planning Time: 0.216 ms
+Execution Time: 4.283 ms

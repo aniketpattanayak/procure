@@ -1,0 +1,17 @@
+title = "procure gitleaks config"
+
+[extend]
+useDefault = true
+
+# Only the documented DEV-ONLY credentials (see .env.example) are allowed. Anything else is a finding.
+[allowlist]
+description = "Documented dev-only values"
+regexes = [
+  '''change-me-dev-only-32-bytes-minimum!!''',
+  '''test-secret-test-secret-test-secret!!''',
+  '''postgres://(app_user:app_pass|platform_user:platform_pass|postgres:postgres|postgres)@(localhost|postgres):5432/procure(_test)?''',
+]
+paths = [
+  '''(^|/)pnpm-lock\.yaml$''',
+  '''(^|/)\.env\.example$''',
+]
