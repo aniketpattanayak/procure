@@ -75,6 +75,14 @@ export interface StockAdjustmentBody {
   submit?: boolean;
 }
 
+export interface StockTransferBody {
+  fromLocationId: string;
+  toLocationId: string;
+  lines: { itemId: string; qty: string }[];
+  notes?: string;
+  submit?: boolean;
+}
+
 export interface PostedMovement { id?: string; movementType?: string; qtyIn?: string; qtyOut?: string; status?: StockStatus }
 
 const enc = encodeURIComponent;
@@ -115,6 +123,7 @@ export const invApi = {
     http.get<Page<ReturnableLine>>('/inventory/returnable-lines', { issue: q.issue, item: q.item, department: q.department, node: q.node, q: q.q?.trim() || undefined, ...page(cursor, limit) }),
   returnFromIssues: (body: ReturnFromIssuesBody) => http.post<DocumentRow>('/inventory/returns/from-issues', body),
   stockAdjustment: (body: StockAdjustmentBody) => http.post<DocumentRow>('/stock/adjustment', body),
+  stockTransfer: (body: StockTransferBody) => http.post<DocumentRow>('/stock/transfer', body),
 };
 
 export const stockKeys = {
