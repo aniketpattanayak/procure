@@ -30,7 +30,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             from the DOM, so a nonce prop here would fail hydration. */}
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
-      <body className="min-h-dvh bg-bg text-fg">
+      <body className="min-h-dvh bg-bg text-fg" suppressHydrationWarning>
         <a href="#main" className="sr-only z-[200] rounded bg-surface px-3 py-2 focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:shadow-pop">
           {t('common.skipToContent')}
         </a>

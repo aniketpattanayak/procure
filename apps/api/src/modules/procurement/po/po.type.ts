@@ -66,6 +66,8 @@ export const PO_SPEC: SystemTypeSpec = {
           key: 'item', type: 'lookup', label: 'Item', system: true, required: true, width: 4, source: { kind: 'master', masterKey: 'item' }, display: ['code', 'name'],
           autofill: [{ from: 'uom', to: 'uom', overwrite: 'if_empty' }, { from: 'tax_code', to: 'tax_code', overwrite: 'if_empty' }],
         },
+        { key: 'uom', type: 'lookup', label: 'Unit', system: true, width: 2, source: { kind: 'master', masterKey: 'uom' }, display: ['code'], filterBy: [], autofill: [] },
+        { key: 'qty', type: 'decimal', label: 'Qty', system: true, required: true, width: 2, precision: 3, min: 0 },
         { key: 'rate', type: 'currency', label: 'Rate', system: true, required: true, min: 0, width: 2 },
         { key: 'discount_pct', type: 'percentage', label: 'Discount %', min: 0, max: 100, width: 2 },
         { key: 'tax_code', type: 'lookup', label: 'Tax code', width: 2, source: { kind: 'master', masterKey: 'tax_code' }, display: ['code'] },

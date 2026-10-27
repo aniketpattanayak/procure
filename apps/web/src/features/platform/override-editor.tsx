@@ -72,12 +72,8 @@ export function OverrideEditor({ target, onClose, onSave }: { target: OverrideTa
         size="sm"
         closeLabel={t('common.close')}
         data-testid="override-editor"
-        footer={<>
-          <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button type="submit" form="override-form" loading={isSubmitting} data-testid="override-save">{mode === 'remove' ? t('override.remove') : t('override.save')}</Button>
-        </>}
       >
-        <form id="override-form" onSubmit={submit} noValidate className="space-y-4">
+        <form onSubmit={submit} noValidate className="space-y-4">
           {error && <InlineAlert>{error}</InlineAlert>}
           {hasOverride && (
             <Controller control={control} name="mode" render={({ field }) => (
@@ -112,6 +108,10 @@ export function OverrideEditor({ target, onClose, onSave }: { target: OverrideTa
           <FormField label={t('common.reason')} error={errors.reason?.message} hint={t('override.reasonHint')} required>
             <Textarea rows={3} {...register('reason')} data-testid="override-reason" />
           </FormField>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
+            <Button type="submit" loading={isSubmitting} data-testid="override-save">{mode === 'remove' ? t('override.remove') : t('override.save')}</Button>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

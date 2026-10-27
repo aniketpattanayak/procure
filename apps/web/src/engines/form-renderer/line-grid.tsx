@@ -21,7 +21,7 @@ function colWidth(c: GridColumn): number {
     case 'currency': case 'formula': return 140;
     case 'date': case 'time': return 150;
     case 'datetime': case 'daterange': return 230;
-    case 'lookup': case 'multilookup': case 'multiselect': return 230;
+    case 'lookup': case 'multilookup': case 'multiselect': return 180;
     case 'file': case 'image': case 'files': case 'signature': return 240;
     case 'textarea': return 240;
     default: return 180;
@@ -142,7 +142,7 @@ export function LineGrid({ field, readOnly }: { field: GridField; readOnly: bool
 
   return (
     <div className="min-w-0 space-y-2" data-testid={`grid-${field.key}`}>
-      <div ref={scrollRef} className="overflow-auto rounded border border-border" style={{ maxHeight: virtual ? 520 : undefined }}>
+      <div ref={scrollRef} className="overflow-y-auto rounded border border-border" style={{ maxHeight: virtual ? 520 : undefined }}>
         <table className="w-full border-separate border-spacing-0 text-base" aria-rowcount={rows.length + 1}>
           <thead className="sticky top-0 z-20 bg-subtle">
             <tr>
@@ -151,7 +151,7 @@ export function LineGrid({ field, readOnly }: { field: GridField; readOnly: bool
                 const st = ctx.state[`${field.key}.${c.key}`];
                 const req = c.type !== 'formula' && (c.required || st?.required);
                 return (
-                  <th key={c.key} scope="col" style={{ minWidth: colWidth(c), width: colWidth(c) }}
+                  <th key={c.key} scope="col" style={{ minWidth: colWidth(c) }}
                     className={cn('border-b border-border px-2 py-2 text-left text-sm font-medium text-fg-muted', c.key === firstCol && 'sticky left-10 z-30 border-r bg-subtle', (NUMERIC_TYPES.has(c.type) || c.type === 'formula') && 'text-right')}>
                     <span className="inline-flex items-center gap-1">
                       {c.type === 'formula' && <span className="rounded-sm bg-accent-soft px-1 text-[0.7rem] font-semibold text-accent" aria-hidden>ƒx</span>}
