@@ -58,4 +58,4 @@ services:
     plan: free
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        value: https://procure-api.onrender.com/api/v1
+        value: https://procure-api-2g2v.onrender.com/api/v1
