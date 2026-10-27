@@ -150,8 +150,8 @@ export function AdjustmentPage() {
                             value={l.itemId ? { id: l.itemId, name: l.itemName } : null}
                             onChange={v => setLine(l.id, { itemId: v?.id ?? '', itemName: v?.name ?? '' })}
                             placeholder="Search item…"
-                            aria-label="Item"
-                            data-testid={`adj-item-${i + 1}`}
+                            ariaLabel="Item"
+                            testId={`adj-item-${i + 1}`}
                           />
                           {/* Qty */}
                           <Input
