@@ -4,9 +4,6 @@ databases:
     user: procure_user
     plan: free
 
-  - name: procure-redis
-    plan: free
-
 services:
   # ── NestJS API ──────────────────────────────────────────────────────────────
   - type: web
@@ -36,9 +33,7 @@ services:
           name: procure-db
           property: connectionString
       - key: REDIS_URL
-        fromDatabase:
-          name: procure-redis
-          property: connectionString
+        value: rediss://default:gQAAAAAAAse4AAIgcDIwNmQzNDQ1YjNlMjI0OTgwYTU2ZWU1ZjZjYTNlYmFiMw@pleasant-chicken-182200.upstash.io:6379
       - key: JWT_SECRET
         generateValue: true
       - key: FILE_URL_SECRET
