@@ -65,7 +65,11 @@ export class QueueService implements BeforeApplicationShutdown {
     this.started = true;
     for (const queue of this.processors.keys()) this.startWorker(queue);
     for (const r of this.repeats) {
-      await this.queue(r.queue).add(r.name, r.data, { repeat: r.spec, jobId: `repeat:${r.queue}:${r.name}` });
+      try {
+        await this.queue(r.queue).add(r.name, r.data, { repeat: r.spec, jobId: `repeat:${r.queue}:${r.name}` });
+      } catch (e) {
+        this.log.warn(`repeat ${r.queue}/${r.name}: failed to register (${(e as Error).message}) — skipping`);
+      }
     }
   }
 
