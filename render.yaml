@@ -33,7 +33,7 @@ services:
           name: procure-db
           property: connectionString
       - key: REDIS_URL
-        value: rediss://default:gQAAAAAAAse4AAIgcDIwNmQzNDQ1YjNlMjI0OTgwYTU2ZWU1ZjZjYTNlYmFiMw@pleasant-chicken-182200.upstash.io:6379
+        value: rediss://default:gQAAAAAAA6jZAAIgcDFhMjNlYTRmODcyMTc0ZjRjOWFjODUzZWM4ZjIyYjllYQ@sharing-flounder-239833.upstash.io:6379
       - key: JWT_SECRET
         generateValue: true
       - key: FILE_URL_SECRET
@@ -43,11 +43,11 @@ services:
       - key: COOKIE_SECURE
         value: "true"
       - key: RUN_WORKERS
-        value: inline
+        value: off
       - key: STORAGE_DRIVER
         value: local
       - key: WEB_ORIGIN
-        value: https://procure-web.onrender.com
+        value: https://procure-web-i1rq.onrender.com
 
   # ── Next.js Web ─────────────────────────────────────────────────────────────
   - type: web
