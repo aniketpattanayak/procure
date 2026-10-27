@@ -1,0 +1,66 @@
+databases:
+  - name: procure-db
+    databaseName: procure
+    user: procure_user
+    plan: free
+
+  - name: procure-redis
+    plan: free
+
+services:
+  # ── NestJS API ──────────────────────────────────────────────────────────────
+  - type: web
+    name: procure-api
+    runtime: docker
+    dockerfilePath: infra/docker/api.Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_PORT
+        value: 4000
+      - key: PORT
+        value: 4000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: procure-db
+          property: connectionString
+      - key: DATABASE_PLATFORM_URL
+        fromDatabase:
+          name: procure-db
+          property: connectionString
+      - key: DATABASE_MIGRATOR_URL
+        fromDatabase:
+          name: procure-db
+          property: connectionString
+      - key: REDIS_URL
+        fromDatabase:
+          name: procure-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FILE_URL_SECRET
+        generateValue: true
+      - key: AUDIT_HASH_KEY
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: RUN_WORKERS
+        value: inline
+      - key: STORAGE_DRIVER
+        value: local
+      - key: WEB_ORIGIN
+        value: https://procure-web.onrender.com
+
+  # ── Next.js Web ─────────────────────────────────────────────────────────────
+  - type: web
+    name: procure-web
+    runtime: docker
+    dockerfilePath: infra/docker/web.Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://procure-api.onrender.com/api/v1
