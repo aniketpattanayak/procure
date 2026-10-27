@@ -147,8 +147,8 @@ export function AdjustmentPage() {
                           {/* Item picker */}
                           <MasterPicker
                             masterKey="item"
-                            value={l.itemId ? { id: l.itemId, label: l.itemName } : null}
-                            onChange={v => setLine(l.id, { itemId: v?.id ?? '', itemName: v?.label ?? '' })}
+                            value={l.itemId ? { id: l.itemId, name: l.itemName } : null}
+                            onChange={v => setLine(l.id, { itemId: v?.id ?? '', itemName: v?.name ?? '' })}
                             placeholder="Search item…"
                             aria-label="Item"
                             data-testid={`adj-item-${i + 1}`}
