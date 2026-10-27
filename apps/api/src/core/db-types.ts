@@ -24,6 +24,7 @@ export interface TenantTable {
   id: Generated<string>; code: string; name: string; legal_name: string | null; logo_url: string | null;
   tax_ids: Json<Record<string, string>>; address: Json<Record<string, string>>; timezone: Generated<string>; currency: Generated<string>;
   fy_start_month: Generated<number>; status: Generated<'active' | 'suspended' | 'archived'>; status_reason: string | null;
+  custom_domain: string | null; allow_custom_domain: Generated<boolean>;
   created_at: Generated<Date>; updated_at: Generated<Date>; version: Generated<number>;
 }
 export interface SubscriptionTable {
