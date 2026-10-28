@@ -18,7 +18,7 @@ export const REFRESH_COOKIE_PATH = '/api/v1/auth';
 export function setRefreshCookie(res: Response, token: string, expiresAt: Date) {
   res.cookie(REFRESH_COOKIE, token, {
     httpOnly: true,
-    sameSite: 'strict',
+    sameSite: 'none',
     secure: config.cookieSecure,
     path: REFRESH_COOKIE_PATH,
     expires: expiresAt,
@@ -26,7 +26,7 @@ export function setRefreshCookie(res: Response, token: string, expiresAt: Date) 
 }
 
 function clearRefreshCookie(res: Response) {
-  res.clearCookie(REFRESH_COOKIE, { httpOnly: true, sameSite: 'strict', secure: config.cookieSecure, path: REFRESH_COOKIE_PATH });
+  res.clearCookie(REFRESH_COOKIE, { httpOnly: true, sameSite: 'none', secure: config.cookieSecure, path: REFRESH_COOKIE_PATH });
 }
 
 @Controller('auth')
