@@ -50,9 +50,10 @@ export const SYSTEM_MASTERS: TemplateMaster[] = [
   },
   {
     key: 'item', name: 'Item', pluralName: 'Items', description: 'Materials, consumables and services you buy and stock',
-    settings: { codePattern: 'ITM-{SEQ:5}', codeLabel: 'Item code', nameLabel: 'Item name', listColumns: ['uom'] },
+    settings: { codePattern: 'ITM-{SEQ:5}', codeLabel: 'Item code', nameLabel: 'Item name', listColumns: ['category', 'uom'] },
     definition: {
       fields: [
+        { key: 'category', type: 'select', label: 'Category', options: [{ value: 'RM', label: 'Raw Material' }, { value: 'FG', label: 'Finished Goods' }, { value: 'consumable', label: 'Consumable' }], required: true, width: 4, ...sys },
         { key: 'uom', type: 'lookup', label: 'Unit of measure', source: { kind: 'master', masterKey: 'uom' }, required: true, width: 4, ...sys },
         { key: 'hsn_code', type: 'text', label: 'HSN / SAC code', maxLength: 10, width: 4, ...sys },
         { key: 'track_batch', type: 'toggle', label: 'Track batches', default: false, width: 4, ...sys },

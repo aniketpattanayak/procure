@@ -23,7 +23,7 @@ export function headerSystemFields(hasLines: boolean): Field[] {
 
 export function lineSystemFields(itemLines: boolean): Field[] {
   const item = itemLines ? [
-    { key: 'item', type: 'lookup', label: 'Item', system: true, required: true, width: 4, source: { kind: 'master', masterKey: 'item' }, display: ['code', 'name'], filterBy: [], autofill: [{ from: 'uom', to: 'uom', overwrite: 'if_empty' }] },
+    { key: 'item', type: 'lookup', label: 'Item', system: true, required: true, width: 4, source: { kind: 'master', masterKey: 'item' }, display: ['code', 'name'], filterBy: [{ sourceField: 'category', targetField: 'category' }], autofill: [{ from: 'uom', to: 'uom', overwrite: 'if_empty' }] },
     { key: 'uom', type: 'lookup', label: 'Unit', system: true, width: 2, source: { kind: 'master', masterKey: 'uom' }, display: ['code'], filterBy: [], autofill: [] },
   ] : [];
   return [
