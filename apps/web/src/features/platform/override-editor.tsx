@@ -35,7 +35,7 @@ export function OverrideEditor({ target, onClose, onSave }: { target: OverrideTa
 
   const form = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
-    values: {
+    defaultValues: {
       mode: 'set',
       enabled: target?.kind === 'feature' ? !target.row.enabled : false,
       unlimited: target?.kind === 'limit' ? limitStart === null : false,
