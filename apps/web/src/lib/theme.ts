@@ -20,5 +20,9 @@ export function applyTheme(pref: ThemePref) {
   } catch { /* storage unavailable */ }
 }
 
-/** Inline in <head>: always force dark mode. */
-export const themeBootScript = `document.documentElement.setAttribute('data-theme','dark')`;
+/**
+ * Inline boot script (placed in <head>): reads the stored theme preference and applies it
+ * immediately to prevent a flash of the wrong theme. Falls back to system preference when
+ * no explicit preference is stored.
+ */
+export const themeBootScript = `(function(){try{var v=localStorage.getItem('procure.theme');if(v==='dark'||v==='light'){document.documentElement.setAttribute('data-theme',v);return;}var mq=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');if(mq&&mq.matches){document.documentElement.setAttribute('data-theme','dark');}}catch(e){}})()`;
