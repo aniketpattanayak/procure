@@ -17,70 +17,153 @@ const PO_TOTALS_V1_DISCOUNT = `    {{#ifEq totals.discount "0.00"}}{{else}}<tr><
 `;
 
 export const PO_BODY = `${PRINT_CSS}
+<style>
+  /* ── Jeevaka PO extra styles ── */
+  .jk-header { text-align: center; border-bottom: 2px solid #12355b; padding-bottom: 8px; margin-bottom: 10px; }
+  .jk-header .co-name { font-size: 15pt; font-weight: 800; color: #12355b; letter-spacing: .5px; }
+  .jk-header .co-sub  { font-size: 8pt; color: #4a5560; margin-top: 2px; }
+  .jk-header .po-title { font-size: 13pt; font-weight: 700; letter-spacing: 2px; color: #12355b; text-transform: uppercase; margin-top: 5px; }
+  .jk-grid2 { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #ccc; border-collapse: collapse; margin-bottom: 10px; }
+  .jk-grid2 table { width: 100%; border-collapse: collapse; }
+  .jk-grid2 table td { padding: 3px 6px; border: 1px solid #ccc; font-size: 8.5pt; }
+  .jk-grid2 table td:first-child { font-weight: 600; width: 48%; background: #f4f6f9; }
+  .jk-grid2 .left-half  { border-right: 1px solid #ccc; }
+  .jk-grid2 .right-half { }
+  .jk-section-head { background: #12355b; color: #fff; font-weight: 700; font-size: 8pt; text-transform: uppercase; letter-spacing: .5px; padding: 4px 7px; border: 1px solid #12355b; }
+  .jk-delto-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid #ccc; margin-bottom: 10px; }
+  .jk-delto-grid .box-inner { padding: 0; }
+  .jk-delto-grid table { width: 100%; border-collapse: collapse; }
+  .jk-delto-grid table td { padding: 3px 6px; border: 1px solid #ccc; font-size: 8.5pt; }
+  .jk-delto-grid table td:first-child { font-weight: 600; width: 45%; background: #f4f6f9; }
+  .jk-delto-grid .left-half { border-right: 1px solid #ccc; }
+  .jk-order-val { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #ccc; margin-top: 8px; margin-bottom: 10px; }
+  .jk-order-val table { width: 100%; border-collapse: collapse; }
+  .jk-order-val table td { padding: 3px 6px; border: 1px solid #ccc; font-size: 8.5pt; }
+  .jk-order-val table td:first-child { font-weight: 600; background: #f4f6f9; width: 55%; }
+  .jk-order-val .right-half { border-left: 1px solid #ccc; }
+  .jk-comm-terms { border: 1px solid #ccc; margin-bottom: 10px; }
+  .jk-comm-terms .ct-grid { display: grid; grid-template-columns: 1fr 1fr; }
+  .jk-comm-terms .ct-cell { border: 1px solid #ccc; padding: 0; }
+  .jk-comm-terms .ct-cell table { width: 100%; border-collapse: collapse; }
+  .jk-comm-terms .ct-cell table td { padding: 3px 6px; border: 0; font-size: 8.5pt; }
+  .jk-comm-terms .ct-cell table td:first-child { font-weight: 600; width: 46%; background: #f4f6f9; border-right: 1px solid #eee; }
+  .jk-comm-terms .ct-special td { font-size: 8.5pt; padding: 4px 6px; border-bottom: 1px solid #ccc; }
+  .jk-int-approval { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid #ccc; margin-bottom: 10px; }
+  .jk-int-approval .ap-cell { border-right: 1px solid #ccc; padding: 5px 7px; }
+  .jk-int-approval .ap-cell:last-child { border-right: 0; }
+  .jk-int-approval .ap-label { font-weight: 700; font-size: 8pt; text-align: center; border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-bottom: 3px; }
+  .jk-int-approval .ap-row { font-size: 8pt; color: #6b7785; }
+  .jk-int-approval .ap-name { font-size: 8pt; color: #1f2933; font-weight: 600; }
+  .jk-int-approval .ap-space { height: 40px; }
+  /* Page 2 T&C */
+  .jk-tnc-title { font-size: 11pt; font-weight: 800; text-align: center; text-transform: uppercase; letter-spacing: 1px; color: #12355b; margin: 10px 0 2px; }
+  .jk-tnc-sub   { font-size: 7.5pt; text-align: center; color: #6b7785; margin-bottom: 8px; font-style: italic; }
+  .jk-tnc-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid #ccc; }
+  .jk-tnc-grid .tc-cell { border: 1px solid #ddd; padding: 5px 7px; font-size: 7.8pt; page-break-inside: avoid; }
+  .jk-tnc-grid .tc-cell strong { font-weight: 700; }
+  .jk-supplier-ack { border: 1px solid #ccc; margin-top: 10px; }
+  .jk-supplier-ack .ack-title { background: #12355b; color: #fff; font-weight: 700; font-size: 8pt; text-transform: uppercase; padding: 4px 7px; letter-spacing: .5px; }
+  .jk-supplier-ack table { width: 100%; border-collapse: collapse; }
+  .jk-supplier-ack table td { padding: 4px 7px; border: 1px solid #ccc; font-size: 8.5pt; }
+  .jk-supplier-ack table td:first-child { font-weight: 600; width: 25%; background: #f4f6f9; }
+  .jk-supplier-ack .note { font-size: 7pt; color: #6b7785; padding: 4px 7px; font-style: italic; }
+</style>
 <div class="doc">
 ${DRAFT_WATERMARK}
-${letterhead('Purchase Order')}
 
-<div class="facts">
-  <div><div class="label">PO number</div><div class="value">{{#if document.number}}{{document.number}}{{else}}Not issued{{/if}}{{#if document.revNo}} · Rev {{document.revNo}}{{/if}}</div></div>
-  <div><div class="label">PO date</div><div class="value">{{formatDate document.docDate}}</div></div>
-  <div><div class="label">Expected delivery</div><div class="value">{{#if document.values.expected_date}}{{formatDate document.values.expected_date}}{{else}}As per schedule{{/if}}</div></div>
-  <div><div class="label">Payment terms</div><div class="value">{{#if document.display.payment_terms}}{{document.display.payment_terms}}{{else}}{{#if document.party.paymentTerms}}{{document.party.paymentTerms}}{{else}}As agreed{{/if}}{{/if}}</div></div>
+<!-- ═══════════════════════ HEADER ═══════════════════════ -->
+<div class="jk-header">
+  {{#if tenant.logoUrl}}<img style="max-height:48px;max-width:160px;margin-bottom:4px;" src="{{tenant.logoUrl}}" alt="">{{/if}}
+  <div class="co-name">{{tenant.legalName}}</div>
+  <div class="co-sub">Regd. Office: {{#if tenant.addressText}}{{tenant.addressText}}{{else}}—{{/if}}</div>
+  <div class="co-sub">
+    {{#if tenant.gstin}}<strong>GSTIN:</strong> {{tenant.gstin}}{{/if}}
+    {{#if tenant.cin}}&nbsp;&nbsp;<strong>CIN:</strong> {{tenant.cin}}{{/if}}
+  </div>
+  <div class="po-title">Purchase Order</div>
+  <div style="font-size:7.5pt;color:#6b7785;margin-top:2px;">{{document.statusLabel}}</div>
 </div>
 
-<div class="parties">
-  <div class="box">
-    <h3>Supplier</h3>
-    {{#with document.party}}
-      <div class="name">{{name}}</div>
-      {{#if address}}<div class="tbody">{{address}}</div>{{/if}}
-      <div class="kv">
-        <span class="k">Vendor code</span><span>{{code}}</span>
-        {{#if gstin}}<span class="k">GSTIN</span><span>{{gstin}}</span>{{/if}}
-        {{#if state_code}}<span class="k">State code</span><span>{{state_code}}</span>{{/if}}
-        {{#if phone}}<span class="k">Phone</span><span>{{phone}}</span>{{/if}}
-        {{#if email}}<span class="k">Email</span><span>{{email}}</span>{{/if}}
-      </div>
-    {{else}}
-      <div class="muted">Supplier not selected</div>
-    {{/with}}
+<!-- ═══════════════════════ SUPPLIER DETAILS + ORDER DETAILS ═══════════════════════ -->
+<div class="jk-grid2">
+  <div class="left-half">
+    <div class="jk-section-head">Supplier Details</div>
+    <table>
+      <tr><td>Supplier Code</td><td>{{#if document.party.code}}{{document.party.code}}{{else}}—{{/if}}</td></tr>
+      <tr><td>Supplier Name</td><td>{{#if document.party.name}}<strong>{{document.party.name}}</strong>{{else}}—{{/if}}</td></tr>
+      <tr><td>Address</td><td>{{#if document.party.address}}{{document.party.address}}{{else}}—{{/if}}</td></tr>
+      <tr><td>State</td><td>{{#if document.party.state}}{{document.party.state}}{{else}}—{{/if}}</td></tr>
+      <tr><td>GSTIN</td><td>{{#if document.party.gstin}}{{document.party.gstin}}{{else}}—{{/if}}</td></tr>
+      <tr><td>Contact Person</td><td>{{#if document.party.contactPerson}}{{document.party.contactPerson}}{{else}}—{{/if}}</td></tr>
+      <tr><td>Mobile / Email</td><td>{{#if document.party.phone}}{{document.party.phone}}{{/if}}{{#if document.party.email}} / {{document.party.email}}{{/if}}{{#unless document.party.phone}}{{#unless document.party.email}}—{{/unless}}{{/unless}}</td></tr>
+    </table>
   </div>
-  <div class="box">
-    <h3>Ship to / Bill to</h3>
-    <div class="name">{{tenant.legalName}}</div>
-    <div>{{document.location.name}} ({{document.location.code}})</div>
-    {{#if tenant.addressText}}<div>{{tenant.addressText}}</div>{{/if}}
-    <div class="kv">
-      {{#if tenant.gstin}}<span class="k">GSTIN</span><span>{{tenant.gstin}}</span>{{/if}}
-      {{#if document.location.values.state_code}}<span class="k">State code</span><span>{{document.location.values.state_code}}</span>{{else}}{{#if tenant.stateCode}}<span class="k">State code</span><span>{{tenant.stateCode}}</span>{{/if}}{{/if}}
-      <span class="k">Currency</span><span>{{document.currency}}</span>
-    </div>
+  <div class="right-half">
+    <div class="jk-section-head">Order Details</div>
+    <table>
+      <tr><td>PO No.</td><td><strong>{{#if document.number}}{{document.number}}{{else}}—{{/if}}</strong></td></tr>
+      <tr><td>PO Date</td><td>{{formatDate document.docDate}}</td></tr>
+      <tr><td>Amendment No.</td><td>{{#if document.revNo}}{{document.revNo}}{{else}}—{{/if}}</td></tr>
+      <tr><td>Amendment Date</td><td>{{#if document.amendmentDate}}{{formatDate document.amendmentDate}}{{else}}—{{/if}}</td></tr>
+      <tr><td>Supplier Quotation / Ref. No.</td><td>{{#if document.values.supplier_ref_no}}{{document.values.supplier_ref_no}}{{else}}—{{/if}}</td></tr>
+      <tr><td>Quotation / Ref. Date</td><td>{{#if document.values.supplier_ref_date}}{{formatDate document.values.supplier_ref_date}}{{else}}—{{/if}}</td></tr>
+      <tr><td>PR / Indent No.</td><td>{{#if document.values.indent_ref}}{{document.values.indent_ref}}{{else}}—{{/if}}</td></tr>
+    </table>
   </div>
 </div>
 
+<!-- ═══════════════════════ DELIVER TO + BILL TO ═══════════════════════ -->
+<div class="jk-delto-grid">
+  <div class="left-half">
+    <div class="jk-section-head">Deliver To</div>
+    <table>
+      <tr><td>Entity / Plant</td><td><strong>{{tenant.legalName}}</strong></td></tr>
+      <tr><td>Division / Unit</td><td>{{document.location.name}} ({{document.location.code}})</td></tr>
+      <tr><td>Address</td><td>{{#if tenant.addressText}}{{tenant.addressText}}{{else}}—{{/if}}</td></tr>
+      <tr><td>State</td><td>{{#if document.location.values.state_code}}{{document.location.values.state_code}}{{else}}{{#if tenant.stateCode}}{{tenant.stateCode}}{{else}}—{{/if}}{{/if}}</td></tr>
+      <tr><td>GSTIN</td><td>{{#if tenant.gstin}}{{tenant.gstin}}{{else}}—{{/if}}</td></tr>
+    </table>
+  </div>
+  <div class="right-half">
+    <div class="jk-section-head">Bill To</div>
+    <table>
+      <tr><td>Billing Entity</td><td><strong>{{tenant.legalName}}</strong></td></tr>
+      <tr><td>Division / Unit</td><td>{{document.location.name}}</td></tr>
+      <tr><td>Billing Address</td><td>{{#if tenant.addressText}}{{tenant.addressText}}{{else}}—{{/if}}</td></tr>
+      <tr><td>GSTIN *</td><td>{{#if tenant.gstin}}{{tenant.gstin}}{{else}}—{{/if}}</td></tr>
+      <tr><td>CIN *</td><td>{{#if tenant.cin}}{{tenant.cin}}{{else}}—{{/if}}</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════ ITEM / SERVICE SCHEDULE ═══════════════════════ -->
+<div class="jk-section-head">Item / Service Schedule</div>
 <table class="items">
   <thead>
     <tr>
-      <th class="center" style="width:22px">#</th>
-      <th>Item &amp; description</th>
-      <th style="width:52px">HSN/SAC</th>
-      <th class="num" style="width:58px">Qty</th>
-      <th style="width:34px">Unit</th>
-      <th class="num" style="width:66px">Rate</th>
+      <th class="center" style="width:22px">Sr.</th>
+      <th style="width:60px">Item Code</th>
+      <th>Description / Specification / Make / Grade</th>
+      <th style="width:52px">HSN / SAC</th>
+      <th class="num" style="width:52px">Qty</th>
+      <th style="width:34px">UOM</th>
+      <th class="num" style="width:66px">Unit Rate</th>
       {{#if totals.hasTax}}
-        <th class="num" style="width:72px">Taxable</th>
-        {{#if totals.isInterState}}<th class="num" style="width:74px">IGST</th>{{else}}<th class="num" style="width:66px">CGST</th><th class="num" style="width:66px">SGST</th>{{/if}}
+        <th class="num" style="width:66px">Taxable</th>
+        {{#if totals.isInterState}}<th class="num" style="width:64px">IGST</th>{{else}}<th class="num" style="width:56px">CGST</th><th class="num" style="width:56px">SGST</th>{{/if}}
       {{/if}}
-      <th class="num" style="width:78px">Amount</th>
+      <th class="num" style="width:72px">Amount</th>
     </tr>
   </thead>
   <tbody>
     {{#each lines}}
     <tr{{#if cancelled}} class="cancelled"{{/if}}>
       <td class="center">{{#if sr}}{{sr}}{{else}}–{{/if}}</td>
+      <td class="nowrap">{{item.code}}</td>
       <td>
         <div class="strong">{{#if item}}{{item.name}}{{else}}{{display.description}}{{/if}}</div>
-        <div class="sub">{{#if item}}{{item.code}}{{/if}}{{#if values.remarks}} · {{values.remarks}}{{/if}}{{#if values.expected_date}} · Due {{formatDate values.expected_date}}{{/if}}</div>
+        {{#if values.remarks}}<div class="sub">{{values.remarks}}</div>{{/if}}
+        {{#if values.expected_date}}<div class="sub">Due {{formatDate values.expected_date}}</div>{{/if}}
       </td>
       <td>{{item.hsn}}</td>
       <td class="num">{{formatNumber qty 2}}</td>
@@ -103,57 +186,139 @@ ${letterhead('Purchase Order')}
   </tbody>
 </table>
 
-<div class="summary">
-  <div>
-    <div class="words"><div class="label">Amount in words</div><div class="strong">{{amountInWords totals.grand document.currency}}</div></div>
-    {{#if totals.breakup.length}}
-    <div class="section-title">Tax summary</div>
-    <table class="approvals">
-      <thead><tr><th>Tax</th><th class="num">Taxable value</th><th class="num">Tax amount</th></tr></thead>
-      <tbody>{{#each totals.breakup}}<tr><td>{{label}}</td><td class="num">{{formatMoney taxable ../document.currency}}</td><td class="num">{{formatMoney amount ../document.currency}}</td></tr>{{/each}}</tbody>
+<!-- ═══════════════════════ ORDER VALUE ═══════════════════════ -->
+<div class="jk-section-head" style="margin-top:8px;">Order Value</div>
+<div class="jk-order-val">
+  <div class="left-half">
+    <table>
+      <tr><td>Basic / Material Value</td><td class="num">{{formatMoney totals.taxable document.currency}}</td></tr>
+      {{#ifEq totals.freight "0.00"}}{{else}}<tr><td>Freight</td><td class="num">{{formatMoney totals.freight document.currency}}</td></tr>{{/ifEq}}
+      {{#ifEq totals.otherCharges "0.00"}}{{else}}<tr><td>Additional Charges</td><td class="num">{{formatMoney totals.otherCharges document.currency}}</td></tr>{{/ifEq}}
+      <tr style="font-weight:700;border-top:2px solid #12355b;"><td>Total Order Value</td><td class="num">{{formatMoney totals.grand document.currency}}</td></tr>
     </table>
-    {{/if}}
   </div>
-  <table class="totals">
-${PO_TOTALS_TAXABLE}    {{#if totals.hasTax}}
-      {{#if totals.isInterState}}
-        <tr><td>IGST</td><td class="num">{{formatMoney totals.igst document.currency}}</td></tr>
-      {{else}}
-        <tr><td>CGST</td><td class="num">{{formatMoney totals.cgst document.currency}}</td></tr>
-        <tr><td>SGST</td><td class="num">{{formatMoney totals.sgst document.currency}}</td></tr>
+  <div class="right-half">
+    <table>
+      <tr><td>Order Value in Words</td><td><strong>{{amountInWords totals.grand document.currency}}</strong></td></tr>
+      {{#if totals.hasTax}}
+        {{#if totals.isInterState}}
+          <tr><td>IGST</td><td class="num">{{formatMoney totals.igst document.currency}}</td></tr>
+        {{else}}
+          <tr><td>CGST</td><td class="num">{{formatMoney totals.cgst document.currency}}</td></tr>
+          <tr><td>SGST</td><td class="num">{{formatMoney totals.sgst document.currency}}</td></tr>
+        {{/if}}
       {{/if}}
-      {{#ifEq totals.cess "0.00"}}{{else}}<tr><td>Cess</td><td class="num">{{formatMoney totals.cess document.currency}}</td></tr>{{/ifEq}}
-    {{/if}}
-    {{#ifEq totals.freight "0.00"}}{{else}}<tr><td>Freight</td><td class="num">{{formatMoney totals.freight document.currency}}</td></tr>{{/ifEq}}
-    {{#ifEq totals.otherCharges "0.00"}}{{else}}<tr><td>Other charges</td><td class="num">{{formatMoney totals.otherCharges document.currency}}</td></tr>{{/ifEq}}
-${PO_TOTALS_DISCOUNT_AFTER_TAX}    <tr class="grand"><td>Grand total</td><td class="num">{{formatMoney totals.grand document.currency}}</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════ COMMERCIAL TERMS ═══════════════════════ -->
+<div class="jk-section-head" style="margin-top:8px;">Commercial Terms</div>
+<div class="jk-comm-terms">
+  <div class="ct-grid">
+    <div class="ct-cell">
+      <table><tr><td>Price Basis / Rate Validity</td><td>{{#if document.values.price_basis}}{{document.values.price_basis}}{{else}}—{{/if}}</td></tr></table>
+    </div>
+    <div class="ct-cell">
+      <table><tr><td>Taxes / Duties / TDS</td><td>As applicable</td></tr></table>
+    </div>
+    <div class="ct-cell">
+      <table><tr><td>Payment Terms / Mode / Credit Period</td><td>{{#if document.display.payment_terms}}{{document.display.payment_terms}}{{else}}{{#if document.party.paymentTerms}}{{document.party.paymentTerms}}{{else}}As agreed{{/if}}{{/if}}</td></tr></table>
+    </div>
+    <div class="ct-cell">
+      <table><tr><td>Freight / Transport / Transit Insurance</td><td>{{#if document.values.freight_terms}}{{document.values.freight_terms}}{{else}}—{{/if}}</td></tr></table>
+    </div>
+    <div class="ct-cell">
+      <table><tr><td>Delivery Schedule / Terms</td><td>{{#if document.values.expected_date}}{{formatDate document.values.expected_date}}{{else}}As per schedule{{/if}}</td></tr></table>
+    </div>
+    <div class="ct-cell">
+      <table><tr><td>Packing &amp; Forwarding / Marking</td><td>{{#if document.values.packing_terms}}{{document.values.packing_terms}}{{else}}—{{/if}}</td></tr></table>
+    </div>
+    <div class="ct-cell">
+      <table><tr><td>Quantity Tolerance (if applicable)</td><td>{{#if document.values.qty_tolerance}}{{document.values.qty_tolerance}}{{else}}—{{/if}}</td></tr></table>
+    </div>
+    <div class="ct-cell">
+      <table><tr><td>Inspection / Test Certificates (if applicable)</td><td>{{#if document.values.inspection_terms}}{{document.values.inspection_terms}}{{else}}—{{/if}}</td></tr></table>
+    </div>
+    <div class="ct-cell">
+      <table><tr><td>Warranty / Guarantee (if applicable)</td><td>{{#if document.values.warranty_terms}}{{document.values.warranty_terms}}{{else}}—{{/if}}</td></tr></table>
+    </div>
+    <div class="ct-cell">
+      <table><tr><td>Installation / Commissioning / Site Services (if applicable)</td><td>{{#if document.values.installation_terms}}{{document.values.installation_terms}}{{else}}—{{/if}}</td></tr></table>
+    </div>
+    <div class="ct-cell">
+      <table><tr><td>LD / Penalty (if applicable)</td><td>{{#if document.values.ld_terms}}{{document.values.ld_terms}}{{else}}—{{/if}}</td></tr></table>
+    </div>
+    <div class="ct-cell">
+      <table><tr><td>BG / PBG / Retention (if applicable)</td><td>{{#if document.values.bg_terms}}{{document.values.bg_terms}}{{else}}—{{/if}}</td></tr></table>
+    </div>
+  </div>
+  <table class="ct-special" style="width:100%;border-collapse:collapse;">
+    <tr class="ct-special"><td style="font-weight:600;width:22%;background:#f4f6f9;border:1px solid #ccc;">Special Instructions / Annexure / Reference</td><td style="border:1px solid #ccc;">{{#if document.values.special_instructions}}{{document.values.special_instructions}}{{else}}&nbsp;{{/if}}</td></tr>
   </table>
 </div>
 
-{{#if terms.length}}
-<div class="section-title">Terms &amp; conditions</div>
-<ol class="terms">
-  {{#each terms}}<li><span class="tname">{{name}}.</span> <span class="tbody">{{body}}</span></li>{{/each}}
-</ol>
-{{/if}}
-
-{{#if approvals.length}}
-<div class="section-title">Approvals</div>
-<table class="approvals">
-  <thead><tr><th>Stage</th><th>By</th><th>On</th><th>Outcome</th></tr></thead>
-  <tbody>{{#each approvals}}<tr><td>{{stage}}</td><td>{{by}}</td><td>{{formatDate at "DD-MMM-YYYY HH:mm"}}</td><td>{{outcome}}</td></tr>{{/each}}</tbody>
-</table>
-{{/if}}
-
-<div class="signoff">
-  <div>{{qrCode document.url size=96}}<div class="qr-cap">Scan to open this PO</div></div>
-  <div class="small muted">This is a computer-generated purchase order. Please quote the PO number on your invoice, delivery challan and all correspondence. Supply against this order confirms acceptance of the terms above.</div>
-  <div class="sign">
-    <div class="strong small">For {{tenant.legalName}}</div>
-    <div class="space">{{#if document.images.signature}}<img src="{{document.images.signature}}" alt="">{{/if}}</div>
-    <div class="line">Authorised Signatory</div>
+<!-- ═══════════════════════ INTERNAL APPROVAL ═══════════════════════ -->
+<div class="jk-section-head" style="margin-top:8px;">Internal Approval</div>
+<div class="jk-int-approval">
+  <div class="ap-cell">
+    <div class="ap-label">Prepared By</div>
+    <div class="ap-space"></div>
+    <div class="ap-row">Name / Date / Signature</div>
+  </div>
+  <div class="ap-cell">
+    <div class="ap-label">Verified / Checked By</div>
+    <div class="ap-space"></div>
+    <div class="ap-row">Name / Date / Signature</div>
+  </div>
+  <div class="ap-cell">
+    <div class="ap-label">Approved By</div>
+    {{#each approvals}}<div class="ap-name">{{by}}</div><div class="ap-row">{{formatDate at "DD-MMM-YYYY"}}</div>{{/each}}
+    <div class="ap-space"></div>
+    <div class="ap-row">Name / Date / Signature</div>
+  </div>
+  <div class="ap-cell">
+    <div class="ap-label">Authorised Signatory</div>
+    <div class="ap-space">{{#if document.images.signature}}<img src="{{document.images.signature}}" alt="" style="max-height:40px;">{{/if}}</div>
+    <div class="ap-row">For {{tenant.legalName}}</div>
   </div>
 </div>
+
+<div style="text-align:right;font-size:7pt;color:#6b7785;margin-bottom:4px;">{{qrCode document.url size=64}} <span style="display:inline-block;vertical-align:top;padding-top:8px;margin-left:4px;">Scan to open this PO</span></div>
+
+<!-- ═══════════════════════ PAGE 2: T&C + SUPPLIER ACKNOWLEDGEMENT ═══════════════════════ -->
+<div style="page-break-before: always;">
+<div class="jk-tnc-title">Standard Purchase Order Terms &amp; Conditions</div>
+<div class="jk-tnc-sub">Applicable together with the PO, commercial terms and referenced specification / annexure</div>
+<div class="jk-tnc-grid">
+  <div class="tc-cell"><strong>1. Scope &amp; Conformity:</strong> Goods/services shall conform to the description, quantity, specification, approved sample/drawing and referenced annexures forming part of the PO.</div>
+  <div class="tc-cell"><strong>9. Invoices &amp; Dispatch Documents:</strong> Invoices and delivery challans shall quote the PO number and applicable GST/HSN-SAC details. E-invoice, e-way bill, packing list, LR/transport document and certificates shall be submitted where legally or contractually applicable.</div>
+  <div class="tc-cell"><strong>2. Order Acceptance &amp; Amendment:</strong> Supplier shall acknowledge the PO within the agreed period. Any change to price, quantity, specification, delivery or other terms is valid only through written approval / PO amendment by the Buyer.</div>
+  <div class="tc-cell"><strong>10. Payment &amp; Deductions:</strong> Payment shall be released as per the commercial terms after receipt of acceptable goods/services and complete documents. Statutory deductions including TDS shall be made as applicable.</div>
+  <div class="tc-cell"><strong>3. Order of Precedence:</strong> The PO and its written amendments shall prevail over conflicting supplier quotations, acknowledgements or correspondence unless a deviation is expressly accepted in writing by the Buyer.</div>
+  <div class="tc-cell"><strong>11. Warranty / Service Obligation:</strong> Where warranty/guarantee is stated in the PO, supplier shall repair, replace or rectify covered defects within the agreed period without additional cost to Buyer, subject to the agreed scope.</div>
+  <div class="tc-cell"><strong>4. Delivery:</strong> Time is of the essence. Supply shall be made as per the delivery schedule stated in the PO. Partial or early delivery requires Buyer approval where applicable.</div>
+  <div class="tc-cell"><strong>12. Statutory, Safety &amp; Site Compliance:</strong> Supplier shall comply with applicable laws, taxes, labour requirements, safety/EHS rules, PPE requirements and MSDS obligations relevant to the supply/service.</div>
+  <div class="tc-cell"><strong>5. Quality, Inspection &amp; Certificates:</strong> Buyer may inspect or test goods at supplier works or on receipt. Required test certificates / COA / MTC / guarantee certificates shall accompany the supply where specified.</div>
+  <div class="tc-cell"><strong>13. Cancellation:</strong> Buyer may cancel the PO in whole or part for material breach, persistent delay, non-conforming supply or failure to comply with agreed terms, subject to applicable contractual/legal requirements.</div>
+  <div class="tc-cell"><strong>6. Packing &amp; Transit Responsibility:</strong> Goods shall be suitably packed and identified for safe handling and transit. Loss or damage attributable to inadequate packing or handling shall be to supplier account.</div>
+  <div class="tc-cell"><strong>14. Force Majeure:</strong> A party prevented from performance by events beyond reasonable control shall promptly notify the other party and take reasonable steps to mitigate delay. Continuing events may be handled as mutually agreed in writing.</div>
+  <div class="tc-cell"><strong>7. Rejection &amp; Replacement:</strong> Non-conforming, damaged or short-supplied material may be rejected. Supplier shall remove and replace/rectify such material at its cost within the period communicated by Buyer.</div>
+  <div class="tc-cell"><strong>15. Confidentiality:</strong> Technical, commercial and business information exchanged for the PO shall be kept confidential and used only for performance of the order, unless disclosure is required by law.</div>
+  <div class="tc-cell"><strong>8. Risk Purchase / Alternate Procurement:</strong> If supplier fails to deliver or replace within the agreed period, Buyer may procure the balance from another source and recover reasonable additional cost from the defaulting supplier, subject to PO terms.</div>
+  <div class="tc-cell"><strong>16. Dispute Resolution / Jurisdiction:</strong> Governing law, arbitration mechanism and courts having jurisdiction shall be as approved by {{tenant.legalName}} management/legal before issue of the final standard PO.</div>
+</div>
+
+<div class="jk-supplier-ack" style="margin-top:14px;">
+  <div class="ack-title">Supplier Acknowledgement</div>
+  <table>
+    <tr><td>Supplier Name</td><td></td><td style="font-weight:600;width:25%;background:#f4f6f9;">Authorised Signatory</td><td></td></tr>
+    <tr><td>Name / Designation</td><td></td><td style="font-weight:600;background:#f4f6f9;">Date / Seal</td><td></td></tr>
+  </table>
+  <div class="note">* Mandatory field in the final company format. Legal wording / approval hierarchy to be confirmed before company-wide release.</div>
+</div>
+</div>
+
 </div>`;
 
 export const PO_FOOTER = pageFooter('Purchase Order');
