@@ -31,11 +31,22 @@ type Kind =
   | { type: 'string'; min?: number; max?: number }
   | { type: 'json' };
 
+type ZodDef = { typeName?: string; minValue?: number | null; maxValue?: number | null; isInt?: boolean; options?: string[]; minLength?: number | null; maxLength?: number | null; innerType?: { _def: ZodDef }; schema?: { _def: ZodDef } };
+
+/** Unwrap ZodDefault / ZodOptional / ZodNullable to reach the real inner type. */
+function unwrapDef(def: ZodDef | undefined): ZodDef | undefined {
+  if (!def) return undefined;
+  if (def.typeName === 'ZodDefault' || def.typeName === 'ZodOptional' || def.typeName === 'ZodNullable') {
+    return unwrapDef(def.innerType?._def ?? def.schema?._def);
+  }
+  return def;
+}
+
 /** Control type from the shared registry schema (falls back to the default's JS type for unknown keys). */
 function kindOf(row: SettingRow): Kind {
-  const reg = (SettingsRegistry as Record<string, { schema: { _def: { typeName?: string }; minValue?: number | null; maxValue?: number | null; isInt?: boolean; options?: string[]; minLength?: number | null; maxLength?: number | null } }>)[row.key];
-  const s = reg?.schema;
-  switch (s?._def.typeName) {
+  const reg = (SettingsRegistry as Record<string, { schema: { _def: ZodDef; minValue?: number | null; maxValue?: number | null; isInt?: boolean; options?: string[]; minLength?: number | null; maxLength?: number | null } }>)[row.key];
+  const s = unwrapDef(reg?.schema?._def) ?? reg?.schema;
+  switch (s?.typeName) {
     case 'ZodBoolean': return { type: 'boolean' };
     case 'ZodNumber': return { type: 'number', min: s.minValue ?? undefined, max: s.maxValue ?? undefined, int: !!s.isInt };
     case 'ZodEnum': return { type: 'enum', options: s.options ?? [] };
@@ -241,7 +252,22 @@ function SettingControl({ row, value, onChange, disabled, error }: { row: Settin
       </NativeSelect>
     );
   } else if (kind.type === 'string') {
-    control = (
+    const isLong = kind.max !== undefined && kind.max > 80;
+    control = isLong ? (
+      <textarea
+        id={id}
+        className="w-full rounded-md border border-border bg-input px-3 py-2 font-mono text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        rows={4}
+        value={value === null || value === undefined ? '' : String(value)}
+        onChange={e => onChange(e.target.value === '' ? null : e.target.value)}
+        minLength={kind.min}
+        maxLength={kind.max}
+        disabled={disabled}
+        aria-invalid={!!error || undefined}
+        aria-describedby={`${id}-meta`}
+        data-testid={id}
+      />
+    ) : (
       <Input
         id={id}
         type="text"
@@ -269,7 +295,7 @@ function SettingControl({ row, value, onChange, disabled, error }: { row: Settin
           {error ?? (kind.type === 'number' && (kind.min !== undefined || kind.max !== undefined) ? t('settings.range', { min: kind.min ?? '−∞', max: kind.max ?? '∞', def: display(row.default, kind) }) : t('settings.default', { value: display(row.default, kind) }))}
         </p>
       </div>
-      <div className="flex items-center gap-1">
+      <div className={cn('flex items-center gap-1', kind.type === 'string' && (kind.max !== undefined && kind.max > 80) && 'w-full')}>
         {control}
         <Button
           variant="ghost"
