@@ -4,6 +4,7 @@ import { KeyRound, LogOut, MonitorSmartphone } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { t } from '@/i18n';
 import { useSession } from '@/lib/session';
+import { ThemeMenuItem } from './theme-toggle';
 
 function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]!.toUpperCase()).join('') || '?';
@@ -41,6 +42,8 @@ export function ProfileMenu() {
             <KeyRound aria-hidden />{t('profile.changePassword')}
           </DropdownMenuItem>
         )}
+        <DropdownMenuSeparator />
+        <ThemeMenuItem />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => void logout()} data-testid="logout">
           <LogOut aria-hidden />{impersonation ? t('impersonation.exit') : t('profile.logout')}
