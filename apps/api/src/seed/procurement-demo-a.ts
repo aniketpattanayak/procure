@@ -43,7 +43,7 @@ const VIEWS = ['draft', 'on_hold', 'partially_approved', 'approved', 'rejected',
 const GRANTS: Record<string, string[]> = {
   requester: [...['view', 'add', 'edit', 'delete', 'submit', 'cancel', 'copy', 'comment', 'attach'].map(a => ind(`action.${a}`)), ...[...VIEWS, 'waiting_verify'].map(v => ind(`view.${v}`))],
   indent_clerk: [...['view', 'add', 'edit', 'submit', 'copy', 'comment', 'attach'].map(a => ind(`action.${a}`)), ...['draft', 'waiting_verify', 'rejected', 'approved', 'partially_approved'].map(v => ind(`view.${v}`))],
-  approver: [...['view', 'comment', 'stage_verify'].map(a => ind(`action.${a}`)), ...[...VIEWS, 'waiting_verify'].map(v => ind(`view.${v}`)), 'approvals:action.view'],
+  approver: [...['view', 'comment', 'stage_verify', 'approve_quote'].map(a => ind(`action.${a}`)), ...[...VIEWS, 'waiting_verify'].map(v => ind(`view.${v}`)), 'approvals:action.view'],
   buyer: [
     ...['view', 'comment', 'log_quote', 'compare', 'short_close'].map(a => ind(`action.${a}`)), ...['approved', 'partially_approved', 'closed'].map(v => ind(`view.${v}`)),
     ...['view', 'add', 'edit', 'delete', 'submit', 'cancel', 'comment', 'attach'].map(a => vs(`action.${a}`)), ...[...VIEWS, 'waiting_approve'].map(v => vs(`view.${v}`)),

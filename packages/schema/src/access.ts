@@ -31,7 +31,7 @@ export interface RegistryTab {
 }
 
 export const ScopeEntry = z.object({
-  allNodes: z.boolean().default(false),
+  allNodes: z.boolean().default(true),  // new tenant roles get all-locations access by default
   nodeId: Uuid.nullable().default(null),
   includeDescendants: z.boolean().default(true),
   /** null = applies to every tab. */

@@ -39,6 +39,7 @@ export const PERM = {
   selectionAdd: 'doc.vendor_selection:action.add',
   selectionSubmit: 'doc.vendor_selection:action.submit',
   overApprove: 'doc.vendor_selection:action.over_approve',
+  approveQuote: 'doc.indent:action.approve_quote',
   poAdd: 'doc.po:action.add',
   followup: 'doc.po:action.followup',
   amend: 'doc.po:action.amend',

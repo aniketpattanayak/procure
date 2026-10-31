@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
-import { ComparisonSheet, MyPermissions, VendorQuoteInput, VendorQuoteRow } from '@procure/schema';
+import { ComparisonSheet, DocumentRow, MyPermissions, VendorQuoteInput, VendorQuoteRow } from '@procure/schema';
 import { z } from 'zod';
 import { TenantOnly } from '../../../core/auth/decorators';
 import { CurrentPermissions, Requires } from '../../../core/auth/permissions';
@@ -52,5 +52,22 @@ export class QuotesController {
   itemComparison(@Param('itemId', new UuidParam('Item')) itemId: string, @Query(new Zod(ItemCompareQuery)) q: z.infer<typeof ItemCompareQuery>, @CurrentPermissions() perms?: MyPermissions): Promise<ComparisonSheet> {
     const a = procActor(perms);
     return this.db.tenantTx(a.tenantId, tx => this.comparison.forItem(tx, a, itemId, q.location));
+  }
+  /**
+   * POST /procurement/quotes/:quoteId/approve
+   * Requires `doc.indent:action.approve_quote` — available to the vendor_approver role.
+   * Creates a vendor_selection document for this quote's line (vendor + rate from the quote) and submits it
+   * immediately. If the VS workflow is skipped (auto-approve path), the PO creation flow begins from here.
+   * Body: { qty?: string } — quantity to select; defaults to the indent line's full pending qty.
+   */
+  @Post('quotes/:quoteId/approve')
+  @Requires('doc.indent:action.approve_quote')
+  approve(
+    @Param('quoteId', new UuidParam('Quote')) quoteId: string,
+    @Body() body: { qty?: string },
+    @CurrentPermissions() perms?: MyPermissions,
+  ): Promise<DocumentRow> {
+    const a = procActor(perms);
+    return this.db.tenantTx(a.tenantId, tx => this.quotes.approveQuote(tx, a, quoteId, body.qty));
   }
 }

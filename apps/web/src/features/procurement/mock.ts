@@ -164,6 +164,15 @@ export const mockApi = {
     }
     return Promise.reject(new Error('Quote not found'));
   },
+  approveQuote: (quoteId: string, _qty?: string) => {
+    // Mock: find the quote and return a fake submitted vendor_selection document
+    for (const list of quotes.values()) {
+      const q = list.find(r => r.id === quoteId);
+      if (!q) continue;
+      return wait(fakeDoc('vendor_selection', 'VS/26-27/00009', { statusKey: 'waiting_approve', statusLabel: 'Waiting for Selection approval' }), 600);
+    }
+    return Promise.reject(new Error('Quote not found'));
+  },
   lineComparison: (lineId: string, qty?: string) => wait(sheetFor([lineId], qty)),
   itemComparison: (itemId: string, location?: string) => wait(sheetFor(LINES.filter(l => l.item.id === itemId && (!location || l.location.id === location)).map(l => l.lineId))),
   selectableLines: (q: SelectableQuery): Promise<Page<OrderableLine>> =>

@@ -142,7 +142,7 @@ export function LineGrid({ field, readOnly }: { field: GridField; readOnly: bool
 
   return (
     <div className="min-w-0 space-y-2" data-testid={`grid-${field.key}`}>
-      <div ref={scrollRef} className="overflow-y-auto rounded border border-border" style={{ maxHeight: virtual ? 520 : undefined }}>
+      <div ref={scrollRef} className="overflow-x-auto overflow-y-auto rounded border border-border" style={{ maxHeight: virtual ? 520 : undefined }}>
         <table className="w-full border-separate border-spacing-0 text-base" aria-rowcount={rows.length + 1}>
           <thead className="sticky top-0 z-20 bg-subtle">
             <tr>

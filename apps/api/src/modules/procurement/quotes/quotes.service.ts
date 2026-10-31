@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { ErrorCode, VendorQuoteInput, VendorQuoteRow } from '@procure/schema';
+import { DocumentRow, ErrorCode, SelectionCreate, VendorQuoteInput, VendorQuoteRow } from '@procure/schema';
 import { sql } from 'kysely';
 import type { z } from 'zod';
 import { AuditService } from '../../../core/audit.service';
+import { SelectionService } from '../selection/selection.service';
 import type { Tx } from '../../../core/db.service';
 import { AppError } from '../../../core/errors';
 import { type DocActor, DocStore, fromUnits, toUnits } from '../../documents';
@@ -34,7 +35,12 @@ const num = (v: string | null | undefined) => (v === null || v === undefined ? u
  */
 @Injectable()
 export class QuotesService {
-  constructor(private readonly lines: IndentLines, private readonly store: DocStore, private readonly audit: AuditService) {}
+  constructor(
+    private readonly lines: IndentLines,
+    private readonly store: DocStore,
+    private readonly audit: AuditService,
+    private readonly selection: SelectionService,
+  ) {}
 
   query(tx: Tx, tenantId: string) {
     return tx.selectFrom('app.vendor_quote as q')
@@ -195,5 +201,29 @@ export class QuotesService {
     const rows = await tx.selectFrom('app.vendor_quote').select(['vendor_id', sql<string>`count(*)::text`.as('n')])
       .where('tenant_id', '=', tenantId).where('indent_line_id', 'in', lineIds).groupBy('vendor_id').execute();
     return new Map(rows.map(r => [r.vendor_id, Number(r.n)]));
+  }
+  /**
+   * POST /procurement/quotes/:quoteId/approve — vendor_approver selects a vendor directly from the quotes log:
+   * creates a vendor_selection document for the quote's indent line (using the quote's vendor and rate) and
+   * immediately submits + auto-approves it by bypassing the VS workflow stage. The caller must hold
+   * `doc.indent:action.approve_quote`. The selection document is created in the approved state.
+   *
+   * @param qty - quantity to select (defaults to the line's full pending qty when omitted)
+   */
+  async approveQuote(tx: Tx, actor: DocActor, quoteId: string, qty?: string): Promise<DocumentRow> {
+    const q = await tx.selectFrom('app.vendor_quote as q')
+      .innerJoin('app.document_line as l', 'l.id', 'q.indent_line_id')
+      .select(['q.id', 'q.indent_line_id', 'q.vendor_id', 'q.quoted_rate', 'q.is_current', 'l.qty', 'l.status_key'])
+      .where('q.tenant_id', '=', actor.tenantId).where('q.id', '=', quoteId).executeTakeFirst();
+    if (!q) throw AppError.notFound('Quote');
+    if (!q.is_current) throw AppError.conflict('This quote has been superseded. Reload and approve the latest one.');
+    // Re-use the quoted rate; qty defaults to the indent line qty
+    const selectQty = qty ?? String(q.qty);
+    const selInput: z.input<typeof SelectionCreate> = {
+      values: {},
+      submit: true,
+      lines: [{ indentLineId: q.indent_line_id, vendorId: q.vendor_id, quoteId: q.id, qty: selectQty, rate: q.quoted_rate ?? '0' }],
+    };
+    return this.selection.create(tx, actor, SelectionCreate.parse(selInput));
   }
 }

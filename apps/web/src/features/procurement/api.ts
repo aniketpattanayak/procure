@@ -57,6 +57,10 @@ export const procApi = {
     (quoteId: string, body: QuoteBody) => http.put<VendorQuoteRow>(`/procurement/quotes/${enc(quoteId)}`, body),
     (m, quoteId, body) => m.editQuote(quoteId, body),
   ),
+  approveQuote: pick(
+    (quoteId: string, qty?: string) => http.post<DocumentRow>(`/procurement/quotes/${enc(quoteId)}/approve`, { qty }),
+    (m, quoteId, qty) => m.approveQuote(quoteId, qty),
+  ),
   lineComparison: pick(
     (lineId: string, qty?: string) => http.get<ComparisonSheet>(`/procurement/indent-lines/${enc(lineId)}/comparison`, { qty }),
     (m, lineId, qty) => m.lineComparison(lineId, qty),

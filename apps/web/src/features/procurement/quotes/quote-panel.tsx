@@ -1,8 +1,8 @@
 'use client';
 import type { DocumentLineRow, DocumentRow, VendorQuoteRow } from '@procure/schema';
 import { Badge, Button, cn, EmptyState, NativeSelect, Segmented, Skeleton, toast } from '@procure/ui';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, FileText, History, Paperclip, Pencil, Plus, Scale, ShoppingCart } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { CheckCircle2, ChevronDown, ChevronRight, FileText, History, Paperclip, Pencil, Plus, Scale, ShoppingCart } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { InlineAlert } from '@/components/page';
@@ -77,14 +77,15 @@ export function QuotePanel({ doc, focusLineId, onFocusLine }: { doc: DocumentRow
 
       {line && (
         <LineQuotes key={line.id} doc={doc} line={line} view={view} setView={setView} canCompare={canCompare}
-          canLog={p.has(PERM.logQuote)} canSelect={flow.selectionEnabled && p.has(PERM.selectionAdd)} />
+          canLog={p.has(PERM.logQuote)} canSelect={flow.selectionEnabled && p.has(PERM.selectionAdd)}
+          canApproveQuote={flow.selectionEnabled && p.has(PERM.approveQuote)} />
       )}
     </div>
   );
 }
 
-function LineQuotes({ doc, line, view, setView, canCompare, canLog, canSelect }: {
-  doc: DocumentRow; line: DocumentLineRow; view: View; setView: (v: View) => void; canCompare: boolean; canLog: boolean; canSelect: boolean;
+function LineQuotes({ doc, line, view, setView, canCompare, canLog, canSelect, canApproveQuote }: {
+  doc: DocumentRow; line: DocumentLineRow; view: View; setView: (v: View) => void; canCompare: boolean; canLog: boolean; canSelect: boolean; canApproveQuote: boolean;
 }) {
   const qc = useQueryClient();
   const { currency } = useTenantLocale();
@@ -166,7 +167,8 @@ function LineQuotes({ doc, line, view, setView, canCompare, canLog, canSelect }:
             </div>
           ) : (
             <ul className="space-y-2">
-              {groups.map(g => <VendorQuoteCard key={g.vendor.id} rows={g.rows} qty={num(ctx.qty)} uom={uom} canEdit={canLog} onEdit={r => setForm({ open: true, editing: r })} />)}
+              {groups.map(g => <VendorQuoteCard key={g.vendor.id} rows={g.rows} qty={num(ctx.qty)} uom={uom} canEdit={canLog} onEdit={r => setForm({ open: true, editing: r })}
+                canApprove={canApproveQuote} pendingQty={pending} lineUom={uom} onApproved={() => { void qc.invalidateQueries({ queryKey: procKeys.all }); void qc.invalidateQueries({ queryKey: docKeys.timeline('indent', doc.id) }); }} />)}
             </ul>
           )}
         </div>
@@ -192,8 +194,13 @@ function groupByVendor(rows: VendorQuoteRow[]) {
 }
 
 /** One vendor: the current quote, plus earlier versions (append-only history) when loaded. */
-function VendorQuoteCard({ rows, qty, uom, canEdit, onEdit }: { rows: VendorQuoteRow[]; qty: number; uom: string; canEdit: boolean; onEdit: (r: VendorQuoteRow) => void }) {
+function VendorQuoteCard({ rows, qty, uom, canEdit, onEdit, canApprove, pendingQty, lineUom, onApproved }: { rows: VendorQuoteRow[]; qty: number; uom: string; canEdit: boolean; onEdit: (r: VendorQuoteRow) => void; canApprove: boolean; pendingQty: string; lineUom: string; onApproved: () => void }) {
   const [open, setOpen] = useState(false);
+  const approveMut = useMutation({
+    mutationFn: (quoteId: string) => procApi.approveQuote(quoteId, pendingQty),
+    onSuccess: () => { toast.success(t('proc.quote.approved')); onApproved(); },
+    onError: () => { toast.error(t('proc.quote.approveError')); },
+  });
   const currentRows = rows.filter(r => r.isCurrent);
   const old = rows.filter(r => !r.isCurrent);
   return (
@@ -201,7 +208,16 @@ function VendorQuoteCard({ rows, qty, uom, canEdit, onEdit }: { rows: VendorQuot
       {currentRows.map(r => (
         <li key={r.id} className="rounded-lg border border-border bg-surface" data-testid={`quote-row-${r.vendor.code}`} data-quote-id={r.id} data-version={r.version}>
           <QuoteBody r={r} qty={qty} uom={uom}
-            actions={canEdit && <Button variant="ghost" size="sm" onClick={() => onEdit(r)} data-testid={`quote-edit-${r.vendor.code}`}><Pencil aria-hidden />{t('proc.quote.edit')}</Button>} />
+            actions={
+              <div className="flex items-center gap-1">
+                {canApprove && (
+                  <Button variant="outline" size="sm" tone="success" onClick={() => approveMut.mutate(r.id)} disabled={approveMut.isPending} data-testid={`quote-approve-${r.vendor.code}`}>
+                    <CheckCircle2 aria-hidden />{approveMut.isPending ? t('proc.quote.approving') : t('proc.quote.approve')}
+                  </Button>
+                )}
+                {canEdit && <Button variant="ghost" size="sm" onClick={() => onEdit(r)} data-testid={`quote-edit-${r.vendor.code}`}><Pencil aria-hidden />{t('proc.quote.edit')}</Button>}
+              </div>
+            } />
           {old.length > 0 && (
             <div className="border-t border-border">
               <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} data-testid={`quote-history-${r.vendor.code}`}

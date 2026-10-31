@@ -47,6 +47,7 @@ export const INDENT_SPEC: SystemTypeSpec = {
     { name: 'log_quote', label: 'Log vendor quotes', requiresFeature: FEATURE.quotes },
     { name: 'compare', label: 'Compare quotes', requiresFeature: FEATURE.quotes },
     { name: 'short_close', label: 'Short-close remaining quantity', requiresFeature: FEATURE.indent },
+    { name: 'approve_quote', label: 'Approve vendor quote (select vendor without a VS document)', requiresFeature: FEATURE.quotes },
   ],
   workflow: {
     granularity: 'line',
@@ -82,9 +83,12 @@ export const SELECTION_SPEC: SystemTypeSpec = {
   ],
   workflow: {
     granularity: 'line',
-    stages: [{ key: 'approve', name: 'Selection approval', actions: ['approve', 'reject', 'hold', 'send_back'] }],
+    // vendor_approver role: looks at all logged quotes and approves the chosen vendor in one step.
+    // The same person selects AND approves — no separate selection step needed.
+    // Assign the 'vendor_approver' role key in tenant admin to whichever user should do this.
+    stages: [{ key: 'approve', name: 'Vendor Approval', roleKey: 'vendor_approver', actions: ['approve', 'reject'] }],
   },
-  workflowNote: 'Default vendor selection workflow',
+  workflowNote: 'Vendor approver selects and approves vendor in one step',
 };
 
 /** Agent A's install steps: department master (100), indent (200), vendor_selection (300). */

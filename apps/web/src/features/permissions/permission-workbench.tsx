@@ -67,7 +67,11 @@ export function PermissionWorkbench({ subject, userRoles = [], isTenantAdmin = f
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const tabs = registry.data ?? [];
+  const allTabs = registry.data ?? [];
+  // Filter out bare-key tabs (e.g. "indent") that have a corresponding "doc.*" entry (e.g. "doc.indent");
+  // both can coexist when old platform entries pre-date the doc.* naming convention.
+  const docKeys = new Set(allTabs.filter(t => t.key.startsWith("doc.")).map(t => t.key.slice(4)));
+  const tabs = allTabs.filter(t => t.key.includes(".") || !docKeys.has(t.key));
   const tab = tabs.find(x => x.key === selectedKey) ?? tabs[0];
 
   const baseline = useMemo(() => (tab ? draftFromSet(subject.kind, tab, set.data) : null), [tab, set.data, subject.kind]);
