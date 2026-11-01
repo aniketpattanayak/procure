@@ -45,7 +45,7 @@ function unwrapDef(def: ZodDef | undefined): ZodDef | undefined {
 /** Control type from the shared registry schema (falls back to the default's JS type for unknown keys). */
 function kindOf(row: SettingRow): Kind {
   const reg = (SettingsRegistry as Record<string, { schema: { _def: ZodDef; minValue?: number | null; maxValue?: number | null; isInt?: boolean; options?: string[]; minLength?: number | null; maxLength?: number | null } }>)[row.key];
-  const s = unwrapDef(reg?.schema?._def) ?? reg?.schema;
+  const s = (unwrapDef(reg?.schema?._def) ?? reg?.schema) as ZodDef | undefined;
   switch (s?.typeName) {
     case 'ZodBoolean': return { type: 'boolean' };
     case 'ZodNumber': return { type: 'number', min: s.minValue ?? undefined, max: s.maxValue ?? undefined, int: !!s.isInt };

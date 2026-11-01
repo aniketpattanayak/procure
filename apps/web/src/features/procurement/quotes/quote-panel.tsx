@@ -211,7 +211,7 @@ function VendorQuoteCard({ rows, qty, uom, canEdit, onEdit, canApprove, pendingQ
             actions={
               <div className="flex items-center gap-1">
                 {canApprove && (
-                  <Button variant="outline" size="sm" tone="success" onClick={() => approveMut.mutate(r.id)} disabled={approveMut.isPending} data-testid={`quote-approve-${r.vendor.code}`}>
+                  <Button variant="secondary" size="sm" onClick={() => approveMut.mutate(r.id)} disabled={approveMut.isPending} data-testid={`quote-approve-${r.vendor.code}`}>
                     <CheckCircle2 aria-hidden />{approveMut.isPending ? t('proc.quote.approving') : t('proc.quote.approve')}
                   </Button>
                 )}

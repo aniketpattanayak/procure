@@ -128,7 +128,7 @@ function IndentItemStockPanel({ p }: { p: DocFormBannerProps }) {
         <p className="font-medium mb-1 text-fg-muted uppercase tracking-wide text-xs">Recent Indents</p>
         {recentIndents.isLoading ? <Skeleton className="h-4 w-full" /> : recentIndents.data?.data?.length ? (
           <ul className="space-y-1">
-            {(recentIndents.data.data as Record<string, unknown>[]).map(d => (
+            {(recentIndents.data.data as unknown as Record<string, unknown>[]).map(d => (
               <li key={d.id as string} className="flex items-center gap-2 text-fg-muted">
                 <Badge tone="neutral">{d.number as string}</Badge>
                 <span>{fmtDate(d.date as string)}</span>
@@ -146,7 +146,7 @@ function IndentItemStockPanel({ p }: { p: DocFormBannerProps }) {
           <p className="font-medium mb-1 text-fg-muted uppercase tracking-wide text-xs">Recent Purchase Orders</p>
           {recentPos.isLoading ? <Skeleton className="h-4 w-full" /> : recentPos.data?.data?.length ? (
             <ul className="space-y-1">
-              {(recentPos.data.data as Record<string, unknown>[]).map(d => (
+              {(recentPos.data.data as unknown as Record<string, unknown>[]).map(d => (
                 <li key={d.id as string} className="flex items-center gap-2 text-fg-muted">
                   <Badge tone="neutral">{d.number as string}</Badge>
                   <span>{fmtDate(d.date as string)}</span>
