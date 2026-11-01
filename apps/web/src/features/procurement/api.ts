@@ -9,7 +9,7 @@
 import type {
   ComparisonSheet, DocumentRow, FollowupRow, OrderableLine, Page, RevisionRow, TaxLine, VendorQuoteRow,
 } from '@procure/schema';
-import type { AmendInput, FollowupInput, PoFromLines, SelectionCreate, VendorQuoteInput } from '@procure/schema';
+import { AmendInput, FollowupInput, PoFromLines, SelectionCreate, VendorQuoteInput } from '@procure/schema';
 import type { z } from 'zod';
 import { http } from '@/lib/api';
 import { docKeys } from '@/features/documents/api';
