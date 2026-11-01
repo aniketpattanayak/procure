@@ -65,7 +65,7 @@ export const PO_SPEC: SystemTypeSpec = {
         { key: 'item_category', type: 'lookup', label: 'Category', width: 3, source: { kind: 'master', masterKey: 'item_category' }, display: ['name'] },
         {
           key: 'item', type: 'lookup', label: 'Item', system: true, required: true, width: 4, source: { kind: 'master', masterKey: 'item' }, display: ['code', 'name'],
-          autofill: [{ from: 'uom', to: 'uom', overwrite: 'if_empty' }, { from: 'tax_code', to: 'tax_code', overwrite: 'if_empty' }],
+          autofill: [{ from: 'category', to: 'item_category', overwrite: 'if_empty' }, { from: 'uom', to: 'uom', overwrite: 'if_empty' }, { from: 'tax_code', to: 'tax_code', overwrite: 'if_empty' }],
           filterBy: [{ field: 'item_category', targetField: 'category' }],
         },
         { key: 'rate', type: 'currency', label: 'Rate', system: true, required: true, min: 0, width: 2 },
@@ -94,7 +94,7 @@ export const PO_SPEC: SystemTypeSpec = {
     { key: 'item_category', type: 'lookup', label: 'Category', width: 3, source: { kind: 'master', masterKey: 'item_category' }, display: ['name'] },
     {
       key: 'item', type: 'lookup', label: 'Item', system: true, required: true, width: 4, source: { kind: 'master', masterKey: 'item' }, display: ['code', 'name'],
-      autofill: [{ from: 'uom', to: 'uom', overwrite: 'if_empty' }, { from: 'tax_code', to: 'tax_code', overwrite: 'if_empty' }],
+      autofill: [{ from: 'category', to: 'item_category', overwrite: 'if_empty' }, { from: 'uom', to: 'uom', overwrite: 'if_empty' }, { from: 'tax_code', to: 'tax_code', overwrite: 'if_empty' }],
       filterBy: [{ field: 'item_category', targetField: 'category' }],
     },
   ] as SystemTypeSpec['lineFieldsToEnsure'],

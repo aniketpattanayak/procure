@@ -24,7 +24,7 @@ interface Row {
   id: string; document_id: string; created_at: Date; type_key: string; number: string | null; item_id: string | null; uom_id: string | null; rate: string | null;
   required_date: string | null; vendor_id: string | null; indent_line_id: string | null; indent_number: string | null; indent_required: string | null;
   loc_id: string; loc_name: string; item_code: string | null; item_name: string | null; vendor_code: string | null; vendor_name: string | null;
-  uom_code: string | null; line_no: number; item_tax_code: string | null; approved: string; over_approved: string; ordered: string; short_closed: string;
+  uom_code: string | null; line_no: number; item_tax_code: string | null; item_category_id: string | null; approved: string; over_approved: string; ordered: string; short_closed: string;
 }
 
 /**
@@ -58,7 +58,7 @@ export class PoLinesService {
     const vendorExpr = selectionOn ? sql`nullif(l.custom->>'vendor', '')::uuid` : sql`null::uuid`;
     const indentLineExpr = selectionOn ? sql`nullif(l.custom->>'indent_line', '')::uuid` : sql`l.id`;
     const r = await sql<Row>`
-      select l.id, l.document_id, l.created_at, coalesce(il.line_no, l.line_no) as line_no, nullif(it.data->>'tax_code', '') as item_tax_code, t.key as type_key, d.number, l.item_id, l.uom_id, l.rate::text as rate, l.required_date, ven.id as vendor_id,
+      select l.id, l.document_id, l.created_at, coalesce(il.line_no, l.line_no) as line_no, nullif(it.data->>'tax_code', '') as item_tax_code, nullif(it.data->>'category', '') as item_category_id, t.key as type_key, d.number, l.item_id, l.uom_id, l.rate::text as rate, l.required_date, ven.id as vendor_id,
         il.id as indent_line_id, ind.number as indent_number, il.required_date as indent_required, n.id as loc_id, n.name as loc_name,
         it.code as item_code, it.name as item_name, ven.code as vendor_code, ven.name as vendor_name, u.code as uom_code,
         coalesce(s.approved, 0)::text as approved, coalesce(s.over_approved, 0)::text as over_approved, coalesce(s.ordered, 0)::text as ordered,
@@ -130,7 +130,7 @@ export class PoLinesService {
       const required = dateStr(r.indent_required ?? r.required_date);
       g.lines.push({
         values: {
-          item: r.item_id, uom: r.uom_id, ...(r.item_tax_code ? { tax_code: r.item_tax_code } : {}), qty: p.qty, ...(rate !== null ? { rate } : {}), source_line: r.id,
+          item: r.item_id, uom: r.uom_id, ...(r.item_category_id ? { item_category: r.item_category_id } : {}), ...(r.item_tax_code ? { tax_code: r.item_tax_code } : {}), qty: p.qty, ...(rate !== null ? { rate } : {}), source_line: r.id,
           ...(required ? { required_date: required, schedule: [{ date: required, qty: p.qty }] } : {}),
         },
       });
