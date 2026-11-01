@@ -36,6 +36,13 @@ export const INDENT_SPEC: SystemTypeSpec = {
     },
     lineDefinition: {
       fields: [
+        { key: 'item_category', type: 'lookup', label: 'Category', width: 3, source: { kind: 'master', masterKey: 'item_category' }, display: ['name'] },
+        {
+          key: 'item', type: 'lookup', label: 'Item', system: true, required: true, width: 4,
+          source: { kind: 'master', masterKey: 'item' }, display: ['code', 'name'],
+          autofill: [{ from: 'uom', to: 'uom', overwrite: 'if_empty' }],
+          filterBy: [{ field: 'item_category', targetField: 'category' }],
+        },
         { key: 'rate', type: 'currency', label: 'Estimated rate', system: true, hidden: true, min: 0 },
         { key: 'amount', type: 'formula', label: 'Estimated amount', system: true, hidden: true, expr: 'qty * rate', resultType: 'number', precision: 2 },
         { key: 'remarks', type: 'text', label: 'Remarks', maxLength: 500, width: 4 },
@@ -47,13 +54,22 @@ export const INDENT_SPEC: SystemTypeSpec = {
     { name: 'log_quote', label: 'Log vendor quotes', requiresFeature: FEATURE.quotes },
     { name: 'compare', label: 'Compare quotes', requiresFeature: FEATURE.quotes },
     { name: 'short_close', label: 'Short-close remaining quantity', requiresFeature: FEATURE.indent },
-    { name: 'approve_quote', label: 'Approve vendor quote (select vendor without a VS document)', requiresFeature: FEATURE.quotes },
   ],
   workflow: {
     granularity: 'line',
     stages: [{ key: 'verify', name: 'Verification', actions: ['approve', 'reject', 'hold', 'send_back'] }],
   },
   workflowNote: 'Default indent workflow',
+  /** Ensure item_category and updated item (with filterBy) are present in already-provisioned tenants. */
+  lineFieldsToEnsure: [
+    { key: 'item_category', type: 'lookup', label: 'Category', width: 3, source: { kind: 'master', masterKey: 'item_category' }, display: ['name'] },
+    {
+      key: 'item', type: 'lookup', label: 'Item', system: true, required: true, width: 4,
+      source: { kind: 'master', masterKey: 'item' }, display: ['code', 'name'],
+      autofill: [{ from: 'uom', to: 'uom', overwrite: 'if_empty' }],
+      filterBy: [{ field: 'item_category', targetField: 'category' }],
+    },
+  ] as SystemTypeSpec['lineFieldsToEnsure'],
 };
 
 /** Vendor selection: lines = (indent line, vendor, qty, rate) splits; submit consumes approved indent qty. */
@@ -83,12 +99,9 @@ export const SELECTION_SPEC: SystemTypeSpec = {
   ],
   workflow: {
     granularity: 'line',
-    // vendor_approver role: looks at all logged quotes and approves the chosen vendor in one step.
-    // The same person selects AND approves — no separate selection step needed.
-    // Assign the 'vendor_approver' role key in tenant admin to whichever user should do this.
-    stages: [{ key: 'approve', name: 'Vendor Approval', roleKey: 'vendor_approver', actions: ['approve', 'reject'] }],
+    stages: [],
   },
-  workflowNote: 'Vendor approver selects and approves vendor in one step',
+  workflowNote: 'Default vendor selection workflow (auto-approved)',
 };
 
 /** Agent A's install steps: department master (100), indent (200), vendor_selection (300). */
