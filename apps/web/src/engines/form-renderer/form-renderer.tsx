@@ -50,6 +50,11 @@ export interface FormRendererProps {
   className?: string;
   /** Extra test ids for grid rows / the add button (e.g. documents use `line-row-<n>` and `line-add` for `lines`). */
   gridTestIds?: RendererContextValue['gridTestIds'];
+  /**
+   * Optional per-row extra content rendered in a full-width sub-row below each grid row.
+   * Return null/undefined to skip for a given row.
+   */
+  lineExtra?: RendererContextValue['lineExtra'];
   ref?: Ref<FormRendererHandle>;
 }
 
@@ -104,7 +109,7 @@ const attrsOf = (o: OptionRow | undefined): Record<string, unknown> | null =>
   o ? { code: o.code, name: o.name, ...(o.attrs ?? {}) } : null;
 
 export function FormRenderer({
-  form, value, onChange, mode = 'edit', errors: serverErrorsIn, refs, files: filesIn, currency = 'INR', timeZone, context, onEvaluate, idPrefix, className, gridTestIds, ref,
+  form, value, onChange, mode = 'edit', errors: serverErrorsIn, refs, files: filesIn, currency = 'INR', timeZone, context, onEvaluate, idPrefix, className, gridTestIds, lineExtra, ref,
 }: FormRendererProps) {
   const def = form.definition;
   const autoId = useId().replace(/:/g, '');
@@ -288,6 +293,7 @@ export function FormRenderer({
     values: value, computed: evaluation.values, state: evaluation.state, evalErrors: evaluation.errors, errors, readOnly,
     setValue, setCell, setRows, touch, rememberOptions, optionFor, labelFromRefs, attrsFor, files, rememberFile,
     gridTestIds,
+    lineExtra,
     fieldByKey: k => fieldMap.get(k),
     columnByKey: (g, k) => { const gf = fieldMap.get(g); return gf?.type === 'grid' ? gf.columns.find(c => c.key === k) : undefined; },
   };

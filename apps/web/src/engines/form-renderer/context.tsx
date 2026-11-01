@@ -1,6 +1,6 @@
 'use client';
 import type { DataField, FileMeta, FormDefinition, FormEvaluationResult, FormulaError, GridColumn, OptionRow } from '@procure/schema';
-import { createContext, useContext } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import type { ErrorMap } from './validation';
 
 /** Where a control lives: the header, or one row of a grid. */
@@ -43,6 +43,14 @@ export interface RendererContextValue {
   /** Optional extra test ids per grid key: row (0-based index -> id; set on the row's number cell) and add button wrapper. */
   gridTestIds?: Record<string, { row?: (index: number) => string; add?: string }>;
   columnByKey: (grid: string, key: string) => GridColumn | undefined;
+  /**
+   * Optional per-row extra content rendered in a full-width sub-row immediately after the data row.
+   * Return null / undefined to skip the sub-row for that row.
+   * gridKey — the form field key of the grid (e.g. 'lines')
+   * row     — the raw row values (Record<string, unknown>)
+   * index   — 0-based row index
+   */
+  lineExtra?: (gridKey: string, row: Record<string, unknown>, index: number) => ReactNode;
 }
 
 export const RendererContext = createContext<RendererContextValue | null>(null);

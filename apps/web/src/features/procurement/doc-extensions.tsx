@@ -3,9 +3,9 @@
  * Procurement panels injected into the generic document screens (indent, vendor_selection, po) through
  * features/documents/extensions. Heavy panels load lazily when their tab opens.
  */
-import type { DocumentLineRow, DocumentRow } from '@procure/schema';
+import type { DocumentLineRow, DocumentRow, SettingRow } from '@procure/schema';
 import { Badge, Button, Skeleton, toast } from '@procure/ui';
-import { CalendarClock, FilePenLine, PackagePlus, Scale, Scissors } from 'lucide-react';
+import { CalendarClock, ChevronDown, ChevronUp, FilePenLine, PackagePlus, Scale, Scissors } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -13,13 +13,14 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { docsApi } from '@/features/documents/api';
 import { dec, fmtQty } from '@/features/documents/decimal';
-import { registerDocExtension, type DocExtensionContext, type DocFormBannerProps } from '@/features/documents/extensions';
+import { registerDocExtension, type DocExtensionContext } from '@/features/documents/extensions';
 import { fmtDate } from '@/lib/format';
 import { stockApi, STOCK_PERM } from '@/features/stock/api';
 import { PageSkeleton } from '@/components/guards';
 import { QtyCell } from '@/features/documents/status';
 import { t } from '@/i18n';
 import { usePermissions } from '@/lib/permissions';
+import { settingsApi, settingsKeys } from '@/features/settings/api';
 import { fmtRate, fmtShortDate, num } from './calc';
 import { refLabel } from '@/features/documents/form-model';
 import { PERM, useProcurementFlow } from './flow';
@@ -74,88 +75,216 @@ function QuoteLineAction({ ctx, line }: { ctx: DocExtensionContext; line: Docume
   );
 }
 
-/* ------------------------------------------------------------------ indent stock + history panel */
+/* ------------------------------------------------------------------ indent item stock bar (per-line, collapsed + expandable) */
 
-function IndentItemStockPanel({ p }: { p: DocFormBannerProps }) {
+/** Read a boolean tenant setting, with a default fallback. */
+function usePanelSetting(rows: SettingRow[], key: string, fallback: boolean | number): boolean | number {
+  const row = rows.find(r => r.key === key);
+  const v = row?.value ?? row?.default ?? fallback;
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v;
+  return fallback;
+}
+
+/**
+ * Per-line info bar: appears collapsed (one thin row) once an item is selected on that line.
+ * Click "Show more" → expands a drawer with full stock pills + recent indents + recent POs.
+ * All sections are admin-configurable via `procurement.indent_panel.*` tenant settings.
+ *
+ * Accepts raw itemId + locationId so it works both on the live form (raw row values) and on the
+ * saved detail page (via lineColumns, where we extract from DocumentLineRow).
+ */
+export function IndentLineStockBar({ itemId, locationId }: { itemId: string | undefined; locationId?: string }) {
   const perm = usePermissions();
-  const itemId = typeof p.values.item === 'string' && p.values.item
-    ? p.values.item
-    : Array.isArray(p.values.lines)
-      ? ((p.values.lines as Record<string, unknown>[]).find(l => typeof l.item === 'string' && l.item) ?? {}).item as string | undefined
-      : undefined;
+  const [expanded, setExpanded] = useState(false);
 
+  // Load tenant settings (cached across all line bars on the form — one request total)
+  const settings = useQuery({ queryKey: settingsKeys.list, queryFn: settingsApi.list, staleTime: 300_000 });
+  const rows = settings.data ?? [];
+
+  const panelEnabled = usePanelSetting(rows, 'procurement.indent_panel.enabled', true) as boolean;
+  const showStock = usePanelSetting(rows, 'procurement.indent_panel.show_stock', true) as boolean;
+  const showLastIndent = usePanelSetting(rows, 'procurement.indent_panel.show_last_indent', true) as boolean;
+  const showLastPo = usePanelSetting(rows, 'procurement.indent_panel.show_last_po', true) as boolean;
+  const showIndentList = usePanelSetting(rows, 'procurement.indent_panel.show_indent_list', true) as boolean;
+  const showPoList = usePanelSetting(rows, 'procurement.indent_panel.show_po_list', true) as boolean;
+  const indentCount = usePanelSetting(rows, 'procurement.indent_panel.indent_count', 5) as number;
+  const poCount = usePanelSetting(rows, 'procurement.indent_panel.po_count', 5) as number;
+  const locationFilter = usePanelSetting(rows, 'procurement.indent_panel.location_filter', true) as boolean;
+  const canViewStock = perm.has(STOCK_PERM.view);
+  const canViewPo = perm.has('doc.po:action.view');
+
+  // Stock summary
   const stock = useQuery({
-    queryKey: ['stock-summary', itemId],
+    queryKey: ['stock-summary', itemId, locationFilter ? locationId : undefined],
     queryFn: () => stockApi.summary(itemId!),
-    enabled: !!itemId && perm.has(STOCK_PERM.view),
+    enabled: !!itemId && canViewStock && showStock && panelEnabled,
     staleTime: 30_000,
   });
-  const recentIndents = useQuery({
-    queryKey: ['indent-recent-item', itemId],
-    queryFn: () => docsApi.list('indent', { view: 'document', item: itemId, sort: '-date' }, null, 3),
-    enabled: !!itemId,
-    staleTime: 60_000,
-  });
-  const recentPos = useQuery({
-    queryKey: ['po-recent-item', itemId],
-    queryFn: () => docsApi.list('po', { view: 'document', item: itemId, sort: '-date' }, null, 3),
-    enabled: !!itemId && perm.has('doc.po:action.view'),
+
+  // Last indent (limit 1 for collapsed bar chip)
+  const lastIndentQ = useQuery({
+    queryKey: ['indent-last-item', itemId],
+    queryFn: () => docsApi.list('indent', { view: 'document', item: itemId, sort: '-date' }, null, 1),
+    enabled: !!itemId && showLastIndent && panelEnabled,
     staleTime: 60_000,
   });
 
-  if (!itemId) return null;
+  // Last PO (limit 1 for collapsed bar chip)
+  const lastPoQ = useQuery({
+    queryKey: ['po-last-item', itemId],
+    queryFn: () => docsApi.list('po', { view: 'document', item: itemId, sort: '-date' }, null, 1),
+    enabled: !!itemId && canViewPo && showLastPo && panelEnabled,
+    staleTime: 60_000,
+  });
+
+  // Full lists for drawer (only fetched after expansion)
+  const indentListQ = useQuery({
+    queryKey: ['indent-recent-item', itemId, indentCount],
+    queryFn: () => docsApi.list('indent', { view: 'document', item: itemId, sort: '-date' }, null, indentCount),
+    enabled: !!itemId && expanded && showIndentList && panelEnabled,
+    staleTime: 60_000,
+  });
+  const poListQ = useQuery({
+    queryKey: ['po-recent-item', itemId, poCount],
+    queryFn: () => docsApi.list('po', { view: 'document', item: itemId, sort: '-date' }, null, poCount),
+    enabled: !!itemId && expanded && canViewPo && showPoList && panelEnabled,
+    staleTime: 60_000,
+  });
+
+  // Nothing to show
+  if (!itemId || !panelEnabled) return null;
+  if (!canViewStock && !showLastIndent && !showLastPo) return null;
 
   const totals = stock.data?.totals;
+  const lastIndent = (lastIndentQ.data?.data as unknown as Record<string, unknown>[] | undefined)?.[0];
+  const lastPo = (lastPoQ.data?.data as unknown as Record<string, unknown>[] | undefined)?.[0];
+  const indentList = (indentListQ.data?.data as unknown as Record<string, unknown>[] | undefined) ?? [];
+  const poList = (poListQ.data?.data as unknown as Record<string, unknown>[] | undefined) ?? [];
 
   return (
-    <div className="mb-4 rounded border border-border bg-subtle p-3 text-sm space-y-3">
-      {/* Stock summary */}
-      {perm.has(STOCK_PERM.view) && (
-        <div>
-          <p className="font-medium mb-1 text-fg-muted uppercase tracking-wide text-xs">Current Stock</p>
-          {stock.isLoading ? <Skeleton className="h-5 w-64" /> : totals ? (
-            <div className="flex flex-wrap gap-4">
-              <span>Available: <strong className="text-fg">{fmtQty(totals.available)}</strong></span>
-              <span>Open PO: <strong className="text-fg">{fmtQty(totals.openPoQty)}</strong></span>
-              <span>Pending Issue: <strong className="text-fg">{fmtQty(totals.pendingIssueQty)}</strong></span>
-            </div>
-          ) : <p className="text-fg-muted text-xs">No stock data</p>}
-        </div>
-      )}
-
-      {/* Recent indents for this item */}
-      <div>
-        <p className="font-medium mb-1 text-fg-muted uppercase tracking-wide text-xs">Recent Indents</p>
-        {recentIndents.isLoading ? <Skeleton className="h-4 w-full" /> : recentIndents.data?.data?.length ? (
-          <ul className="space-y-1">
-            {(recentIndents.data.data as unknown as Record<string, unknown>[]).map(d => (
-              <li key={d.id as string} className="flex items-center gap-2 text-fg-muted">
-                <Badge tone="neutral">{d.number as string}</Badge>
-                <span>{fmtDate(d.date as string)}</span>
-                <span>·</span>
-                <span className="capitalize">{String(d.statusKey ?? '').replace(/_/g, ' ')}</span>
-              </li>
-            ))}
-          </ul>
-        ) : <p className="text-fg-muted text-xs">No recent indents for this item</p>}
+    <div className="mt-1.5" data-testid={`indent-stock-bar-${itemId ?? 'none'}`}>
+      {/* ── COLLAPSED BAR ── */}
+      <div className="flex items-center rounded border border-border bg-subtle text-xs overflow-hidden">
+        {/* Available stock chip */}
+        {showStock && canViewStock && (
+          <span className="flex items-center gap-1 px-2.5 py-1.5 border-r border-border whitespace-nowrap">
+            <span className="text-fg-muted">Avail</span>
+            {stock.isLoading
+              ? <Skeleton className="h-3 w-10 inline-block" />
+              : <strong className="text-success">{totals ? fmtQty(totals.available) : '—'}</strong>
+            }
+          </span>
+        )}
+        {/* Last indent chip */}
+        {showLastIndent && (
+          <span className="flex items-center gap-1 px-2.5 py-1.5 border-r border-border whitespace-nowrap">
+            <span className="text-fg-muted">Last Indent</span>
+            {lastIndentQ.isLoading
+              ? <Skeleton className="h-3 w-16 inline-block" />
+              : lastIndent
+                ? <><Badge tone="neutral" className="text-[10px] py-0 px-1">{lastIndent.number as string}</Badge><span className="text-fg-muted">· {fmtDate(lastIndent.date as string)}</span></>
+                : <span className="text-fg-subtle">—</span>
+            }
+          </span>
+        )}
+        {/* Last PO chip */}
+        {showLastPo && canViewPo && (
+          <span className="flex items-center gap-1 px-2.5 py-1.5 border-r border-border whitespace-nowrap">
+            <span className="text-fg-muted">Last PO</span>
+            {lastPoQ.isLoading
+              ? <Skeleton className="h-3 w-16 inline-block" />
+              : lastPo
+                ? <><Badge tone="neutral" className="text-[10px] py-0 px-1">{lastPo.number as string}</Badge><span className="text-fg-muted">· {fmtDate(lastPo.date as string)}</span></>
+                : <span className="text-fg-subtle">—</span>
+            }
+          </span>
+        )}
+        {/* Expand / collapse button */}
+        <button
+          type="button"
+          className="ml-auto flex items-center gap-1 px-2.5 py-1.5 text-accent font-medium hover:bg-accent/5 whitespace-nowrap"
+          onClick={() => setExpanded(e => !e)}
+          data-testid={`indent-stock-bar-toggle-${itemId ?? 'none'}`}
+        >
+          {expanded ? <><ChevronUp className="size-3" aria-hidden />Hide</> : <><ChevronDown className="size-3" aria-hidden />Show more</>}
+        </button>
       </div>
 
-      {/* Recent POs for this item */}
-      {perm.has('doc.po:action.view') && (
-        <div>
-          <p className="font-medium mb-1 text-fg-muted uppercase tracking-wide text-xs">Recent Purchase Orders</p>
-          {recentPos.isLoading ? <Skeleton className="h-4 w-full" /> : recentPos.data?.data?.length ? (
-            <ul className="space-y-1">
-              {(recentPos.data.data as unknown as Record<string, unknown>[]).map(d => (
-                <li key={d.id as string} className="flex items-center gap-2 text-fg-muted">
-                  <Badge tone="neutral">{d.number as string}</Badge>
-                  <span>{fmtDate(d.date as string)}</span>
-                  <span>·</span>
-                  <span className="capitalize">{String(d.statusKey ?? '').replace(/_/g, ' ')}</span>
-                </li>
-              ))}
-            </ul>
-          ) : <p className="text-fg-muted text-xs">No recent POs for this item</p>}
+      {/* ── EXPANDED DRAWER ── */}
+      {expanded && (
+        <div className="rounded-b border border-t-0 border-border bg-surface px-3 py-2.5 text-xs space-y-2.5">
+          {/* Full stock pills */}
+          {showStock && canViewStock && (
+            <div className="flex flex-wrap gap-2">
+              {stock.isLoading ? <Skeleton className="h-10 w-64" /> : totals ? (
+                <>
+                  <div className="rounded border border-border bg-subtle px-2.5 py-1.5">
+                    <div className="text-fg-subtle mb-0.5">Available</div>
+                    <div className="text-sm font-bold text-success">{fmtQty(totals.available)}</div>
+                  </div>
+                  <div className="rounded border border-border bg-subtle px-2.5 py-1.5">
+                    <div className="text-fg-subtle mb-0.5">Open PO</div>
+                    <div className="text-sm font-bold text-fg">{fmtQty(totals.openPoQty)}</div>
+                  </div>
+                  <div className="rounded border border-border bg-subtle px-2.5 py-1.5">
+                    <div className="text-fg-subtle mb-0.5">Pending Issue</div>
+                    <div className="text-sm font-bold text-fg">{fmtQty(totals.pendingIssueQty)}</div>
+                  </div>
+                  {locationId && locationFilter && (
+                    <div className="rounded border border-border bg-subtle px-2.5 py-1.5">
+                      <div className="text-fg-subtle mb-0.5">Location</div>
+                      <div className="text-sm font-medium text-fg">{stock.data?.nodes.find(n => n.node.id === locationId)?.node.name ?? 'This location'}</div>
+                    </div>
+                  )}
+                </>
+              ) : <p className="text-fg-muted italic">No stock data</p>}
+            </div>
+          )}
+
+          {/* Recent indents list */}
+          {showIndentList && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-fg-muted">Recent Indents</p>
+                <Link href={`/docs/indent?item=${itemId}`} className="text-accent hover:underline text-[10px]" onClick={e => e.stopPropagation()}>View all →</Link>
+              </div>
+              {indentListQ.isLoading ? <Skeleton className="h-4 w-full" /> : indentList.length ? (
+                <ul className="space-y-1">
+                  {indentList.map(d => (
+                    <li key={d.id as string} className="flex items-center gap-1.5">
+                      <Badge tone="neutral" className="text-[10px] py-0 px-1 shrink-0">{d.number as string}</Badge>
+                      <span className="text-fg-muted">{fmtDate(d.date as string)}</span>
+                      <span className="capitalize text-fg-muted">{String(d.statusKey ?? '').replace(/_/g, ' ')}</span>
+                      <span className="ml-auto tabular-nums font-medium">{fmtQty(String((d as Record<string, unknown>).qty ?? '0'))}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="text-fg-muted italic">No recent indents</p>}
+            </div>
+          )}
+
+          {/* Recent POs list */}
+          {showPoList && canViewPo && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-fg-muted">Recent Purchase Orders</p>
+                <Link href={`/docs/po?item=${itemId}`} className="text-accent hover:underline text-[10px]" onClick={e => e.stopPropagation()}>View all →</Link>
+              </div>
+              {poListQ.isLoading ? <Skeleton className="h-4 w-full" /> : poList.length ? (
+                <ul className="space-y-1">
+                  {poList.map(d => (
+                    <li key={d.id as string} className="flex items-center gap-1.5">
+                      <Badge tone="neutral" className="text-[10px] py-0 px-1 shrink-0">{d.number as string}</Badge>
+                      <span className="text-fg-muted">{fmtDate(d.date as string)}</span>
+                      <span className="capitalize text-fg-muted">{String(d.statusKey ?? '').replace(/_/g, ' ')}</span>
+                      <span className="ml-auto tabular-nums font-medium">{fmtQty(String((d as Record<string, unknown>).qty ?? '0'))}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="text-fg-muted italic">No recent POs</p>}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -167,12 +296,24 @@ registerDocExtension('indent', {
   // Indent Clerks and other view-only roles will not see this tab at all.
   tabs: ctx => (ctx.doc.number && useCanQuote() ? [{ key: 'quotes', label: t('proc.quotes.tab'), testId: 'doc-tab-quotes', render: () => <QuotesTabGate ctx={ctx} /> }] : []),
   actions: ctx => <ShortCloseButton ctx={ctx} type="indent" />,
-  lineColumns: ctx => (ctx.doc.number ? [
-    { key: 'selected', label: t('proc.qty.selected'), align: 'right', cell: l => <QtyCell value={l.qty.selected} tone="success" testId={`qty-selected-${l.lineNo}`} /> },
-    { key: 'ordered', label: t('proc.qty.ordered'), align: 'right', cell: l => <QtyCell value={l.qty.ordered} testId={`qty-ordered-${l.lineNo}`} /> },
-    { key: 'quotes', label: t('proc.quotes.col'), cell: l => <QuoteLineAction ctx={ctx} line={l} /> },
-  ] : []),
-  formBanner: p => <IndentItemStockPanel p={p} />,
+  lineColumns: ctx => {
+    // Location from the saved doc's values (the indent header's `location` field)
+    const locationId = typeof ctx.doc.values?.location === 'string' ? ctx.doc.values.location : undefined;
+    return [
+      // Per-line stock info bar on the DETAIL (read-only saved) view.
+      // On the new/edit form this is rendered via FormRenderer's lineExtra prop instead (see doc-form-page.tsx).
+      {
+        key: 'stock_info',
+        label: '',
+        cell: l => <IndentLineStockBar itemId={typeof l.values.item === 'string' ? l.values.item : undefined} locationId={locationId} />,
+      },
+      ...(ctx.doc.number ? [
+        { key: 'selected', label: t('proc.qty.selected'), align: 'right' as const, cell: (l: DocumentLineRow) => <QtyCell value={l.qty.selected} tone="success" testId={`qty-selected-${l.lineNo}`} /> },
+        { key: 'ordered', label: t('proc.qty.ordered'), align: 'right' as const, cell: (l: DocumentLineRow) => <QtyCell value={l.qty.ordered} testId={`qty-ordered-${l.lineNo}`} /> },
+        { key: 'quotes', label: t('proc.quotes.col'), cell: (l: DocumentLineRow) => <QuoteLineAction ctx={ctx} line={l} /> },
+      ] : []),
+    ];
+  },
   itemColumns: () => [
     { id: 'selected', label: t('proc.qty.selected'), width: 96, align: 'right', cell: r => <QtyCell value={r.qty.selected} tone="success" /> },
     { id: 'ordered', label: t('proc.qty.ordered'), width: 96, align: 'right', cell: r => <QtyCell value={r.qty.ordered} /> },

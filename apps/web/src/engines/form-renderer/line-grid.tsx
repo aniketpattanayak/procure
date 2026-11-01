@@ -170,51 +170,62 @@ export function LineGrid({ field, readOnly }: { field: GridField; readOnly: bool
               const row = rows[i]!;
               const crow = computedRows[i] ?? row;
               const scope = { grid: field.key, rowIndex: i, row };
+              const extra = ctx.lineExtra?.(field.key, row, i);
+              const colSpanTotal = cols.length + 1 + (editable ? 1 : 0); // # + data cols + actions col
               return (
-                <tr key={String(row._row ?? i)} aria-rowindex={i + 2} className="group" style={{ height: ROW_H }} data-testid={`grid-${field.key}-row-${i}`}>
-                  <th scope="row" data-testid={ctx.gridTestIds?.[field.key]?.row?.(i)} className="sticky left-0 z-10 border-b border-r border-border bg-surface px-2 text-right text-xs font-normal tabular-nums text-fg-subtle group-hover:bg-subtle">{i + 1}</th>
-                  {cols.map(c => {
-                    const path = `${field.key}.${i}.${c.key}`;
-                    const id = fieldDomId(ctx.idPrefix, path);
-                    const err = ctx.errors[path];
-                    const st = ctx.state[`${field.key}.${c.key}`];
-                    const ro = !editable || c.readOnly || !!st?.readOnly || ctx.readOnly.has(`${field.key}.${c.key}`) || c.type === 'formula';
-                    const value = c.type === 'formula' ? crow[c.key] : row[c.key];
-                    return (
-                      <td key={c.key} data-cell data-row={i} data-col={c.key} data-testid={`field-${field.key}-${i}-${c.key}`}
-                        className={cn('border-b border-border p-0 align-top', c.key === firstCol && 'sticky left-10 z-10 border-r bg-surface group-hover:bg-subtle', err && 'bg-danger-soft/40')}>
-                        {view ? (
-                          <div className="px-2 py-1"><ReadValue field={c as ControlField} value={value} scope={scope} testId={`field-${field.key}-${i}-${c.key}-value`} /></div>
-                        ) : (
-                          <FieldControl
-                            field={c as ControlField}
-                            value={value}
-                            onChange={(v, opt) => ctx.setCell(field.key, i, c.key, v, opt)}
-                            onBlur={() => ctx.touch(path)}
-                            scope={scope}
-                            id={id}
-                            describedBy={err ? `${id}-error` : undefined}
-                            invalid={!!err}
-                            required={c.required || !!st?.required}
-                            readOnly={ro}
-                            compact
-                            ariaLabel={t('fr.grid.cellLabel', { col: c.label, row: i + 1 })}
-                            testId={`field-${field.key}-${i}-${c.key}-input`}
-                          />
-                        )}
-                        {err && <p id={`${id}-error`} role="alert" className="px-2 pb-1 text-xs font-medium text-danger">{err}</p>}
+                <>
+                  <tr key={String(row._row ?? i)} aria-rowindex={i + 2} className="group" style={{ height: ROW_H }} data-testid={`grid-${field.key}-row-${i}`}>
+                    <th scope="row" data-testid={ctx.gridTestIds?.[field.key]?.row?.(i)} className="sticky left-0 z-10 border-b border-r border-border bg-surface px-2 text-right text-xs font-normal tabular-nums text-fg-subtle group-hover:bg-subtle">{i + 1}</th>
+                    {cols.map(c => {
+                      const path = `${field.key}.${i}.${c.key}`;
+                      const id = fieldDomId(ctx.idPrefix, path);
+                      const err = ctx.errors[path];
+                      const st = ctx.state[`${field.key}.${c.key}`];
+                      const ro = !editable || c.readOnly || !!st?.readOnly || ctx.readOnly.has(`${field.key}.${c.key}`) || c.type === 'formula';
+                      const value = c.type === 'formula' ? crow[c.key] : row[c.key];
+                      return (
+                        <td key={c.key} data-cell data-row={i} data-col={c.key} data-testid={`field-${field.key}-${i}-${c.key}`}
+                          className={cn('border-b border-border p-0 align-top', c.key === firstCol && 'sticky left-10 z-10 border-r bg-surface group-hover:bg-subtle', err && 'bg-danger-soft/40')}>
+                          {view ? (
+                            <div className="px-2 py-1"><ReadValue field={c as ControlField} value={value} scope={scope} testId={`field-${field.key}-${i}-${c.key}-value`} /></div>
+                          ) : (
+                            <FieldControl
+                              field={c as ControlField}
+                              value={value}
+                              onChange={(v, opt) => ctx.setCell(field.key, i, c.key, v, opt)}
+                              onBlur={() => ctx.touch(path)}
+                              scope={scope}
+                              id={id}
+                              describedBy={err ? `${id}-error` : undefined}
+                              invalid={!!err}
+                              required={c.required || !!st?.required}
+                              readOnly={ro}
+                              compact
+                              ariaLabel={t('fr.grid.cellLabel', { col: c.label, row: i + 1 })}
+                              testId={`field-${field.key}-${i}-${c.key}-input`}
+                            />
+                          )}
+                          {err && <p id={`${id}-error`} role="alert" className="px-2 pb-1 text-xs font-medium text-danger">{err}</p>}
+                        </td>
+                      );
+                    })}
+                    {editable && (
+                      <td className="border-b border-border px-1 text-right">
+                        <div className="flex justify-end gap-0.5 opacity-70 group-focus-within:opacity-100 group-hover:opacity-100">
+                          <Button variant="ghost" size="icon-sm" className="size-7" onClick={() => addRow(i + 1, row)} disabled={atMax} aria-label={t('fr.grid.duplicate', { n: i + 1 })} data-testid={`grid-${field.key}-dup-${i}`}><Copy /></Button>
+                          <Button variant="ghost" size="icon-sm" className="size-7 hover:text-danger" onClick={() => removeRow(i)} disabled={atMin} aria-label={t('fr.grid.remove', { n: i + 1 })} data-testid={`grid-${field.key}-del-${i}`}><Trash2 /></Button>
+                        </div>
                       </td>
-                    );
-                  })}
-                  {editable && (
-                    <td className="border-b border-border px-1 text-right">
-                      <div className="flex justify-end gap-0.5 opacity-70 group-focus-within:opacity-100 group-hover:opacity-100">
-                        <Button variant="ghost" size="icon-sm" className="size-7" onClick={() => addRow(i + 1, row)} disabled={atMax} aria-label={t('fr.grid.duplicate', { n: i + 1 })} data-testid={`grid-${field.key}-dup-${i}`}><Copy /></Button>
-                        <Button variant="ghost" size="icon-sm" className="size-7 hover:text-danger" onClick={() => removeRow(i)} disabled={atMin} aria-label={t('fr.grid.remove', { n: i + 1 })} data-testid={`grid-${field.key}-del-${i}`}><Trash2 /></Button>
-                      </div>
-                    </td>
+                    )}
+                  </tr>
+                  {extra != null && (
+                    <tr key={`${String(row._row ?? i)}-extra`} data-testid={`grid-${field.key}-extra-${i}`}>
+                      <td colSpan={colSpanTotal} className="border-b border-border bg-surface px-3 pb-2 pt-0">
+                        {extra}
+                      </td>
+                    </tr>
                   )}
-                </tr>
+                </>
               );
             })}
             {padBottom > 0 && <tr aria-hidden><td style={{ height: padBottom }} colSpan={cols.length + 2} /></tr>}
