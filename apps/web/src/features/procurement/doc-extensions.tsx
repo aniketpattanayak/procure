@@ -4,12 +4,18 @@
  * features/documents/extensions. Heavy panels load lazily when their tab opens.
  */
 import type { DocumentLineRow, DocumentRow } from '@procure/schema';
-import { Button, toast } from '@procure/ui';
+import { Badge, Button, Skeleton, toast } from '@procure/ui';
 import { CalendarClock, FilePenLine, PackagePlus, Scale, Scissors } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { docsApi } from '@/features/documents/api';
+import { dec, fmtQty } from '@/features/documents/decimal';
+import type { DocFormBannerProps } from '@/features/documents/extensions';
+import { fmtDate } from '@/lib/format';
+import { stockApi, STOCK_PERM } from '@/features/stock/api';
 import { PageSkeleton } from '@/components/guards';
 import { registerDocExtension, type DocExtensionContext } from '@/features/documents/extensions';
 import { dec, fmtQty } from '@/features/documents/decimal';
@@ -70,6 +76,94 @@ function QuoteLineAction({ ctx, line }: { ctx: DocExtensionContext; line: Docume
   );
 }
 
+/* ------------------------------------------------------------------ indent stock + history panel */
+
+function IndentItemStockPanel({ p }: { p: DocFormBannerProps }) {
+  const perm = usePermissions();
+  const itemId = typeof p.values.item === 'string' && p.values.item
+    ? p.values.item
+    : Array.isArray(p.values.lines)
+      ? ((p.values.lines as Record<string, unknown>[]).find(l => typeof l.item === 'string' && l.item) ?? {}).item as string | undefined
+      : undefined;
+
+  const stock = useQuery({
+    queryKey: ['stock-summary', itemId],
+    queryFn: () => stockApi.summary(itemId!),
+    enabled: !!itemId && perm.has(STOCK_PERM.view),
+    staleTime: 30_000,
+  });
+  const recentIndents = useQuery({
+    queryKey: ['indent-recent-item', itemId],
+    queryFn: () => docsApi.list('indent', { view: 'document', item: itemId, sort: '-date' } as Record<string, unknown>, null, 3),
+    enabled: !!itemId,
+    staleTime: 60_000,
+  });
+  const recentPos = useQuery({
+    queryKey: ['po-recent-item', itemId],
+    queryFn: () => docsApi.list('po', { view: 'document', item: itemId, sort: '-date' } as Record<string, unknown>, null, 3),
+    enabled: !!itemId && perm.has('doc.po:action.view'),
+    staleTime: 60_000,
+  });
+
+  if (!itemId) return null;
+
+  const totals = stock.data?.totals;
+
+  return (
+    <div className="mb-4 rounded border border-border bg-subtle p-3 text-sm space-y-3">
+      {/* Stock summary */}
+      {perm.has(STOCK_PERM.view) && (
+        <div>
+          <p className="font-medium mb-1 text-fg-muted uppercase tracking-wide text-xs">Current Stock</p>
+          {stock.isLoading ? <Skeleton className="h-5 w-64" /> : totals ? (
+            <div className="flex flex-wrap gap-4">
+              <span>Available: <strong className="text-fg">{fmtQty(totals.available)}</strong></span>
+              <span>Open PO: <strong className="text-fg">{fmtQty(totals.openPoQty)}</strong></span>
+              <span>Pending Issue: <strong className="text-fg">{fmtQty(totals.pendingIssueQty)}</strong></span>
+            </div>
+          ) : <p className="text-fg-muted text-xs">No stock data</p>}
+        </div>
+      )}
+
+      {/* Recent indents for this item */}
+      <div>
+        <p className="font-medium mb-1 text-fg-muted uppercase tracking-wide text-xs">Recent Indents</p>
+        {recentIndents.isLoading ? <Skeleton className="h-4 w-full" /> : recentIndents.data?.data?.length ? (
+          <ul className="space-y-1">
+            {(recentIndents.data.data as Record<string, unknown>[]).map(d => (
+              <li key={d.id as string} className="flex items-center gap-2 text-fg-muted">
+                <Badge tone="neutral">{d.number as string}</Badge>
+                <span>{fmtDate(d.date as string)}</span>
+                <span>·</span>
+                <span className="capitalize">{String(d.statusKey ?? '').replace(/_/g, ' ')}</span>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="text-fg-muted text-xs">No recent indents for this item</p>}
+      </div>
+
+      {/* Recent POs for this item */}
+      {perm.has('doc.po:action.view') && (
+        <div>
+          <p className="font-medium mb-1 text-fg-muted uppercase tracking-wide text-xs">Recent Purchase Orders</p>
+          {recentPos.isLoading ? <Skeleton className="h-4 w-full" /> : recentPos.data?.data?.length ? (
+            <ul className="space-y-1">
+              {(recentPos.data.data as Record<string, unknown>[]).map(d => (
+                <li key={d.id as string} className="flex items-center gap-2 text-fg-muted">
+                  <Badge tone="neutral">{d.number as string}</Badge>
+                  <span>{fmtDate(d.date as string)}</span>
+                  <span>·</span>
+                  <span className="capitalize">{String(d.statusKey ?? '').replace(/_/g, ' ')}</span>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="text-fg-muted text-xs">No recent POs for this item</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 registerDocExtension('indent', {
   // Vendor quotes tab is only shown to users who can log or compare quotes (e.g. Buyer).
   // Indent Clerks and other view-only roles will not see this tab at all.
@@ -80,6 +174,7 @@ registerDocExtension('indent', {
     { key: 'ordered', label: t('proc.qty.ordered'), align: 'right', cell: l => <QtyCell value={l.qty.ordered} testId={`qty-ordered-${l.lineNo}`} /> },
     { key: 'quotes', label: t('proc.quotes.col'), cell: l => <QuoteLineAction ctx={ctx} line={l} /> },
   ] : []),
+  formBanner: p => <IndentItemStockPanel p={p} />,
   itemColumns: () => [
     { id: 'selected', label: t('proc.qty.selected'), width: 96, align: 'right', cell: r => <QtyCell value={r.qty.selected} tone="success" /> },
     { id: 'ordered', label: t('proc.qty.ordered'), width: 96, align: 'right', cell: r => <QtyCell value={r.qty.ordered} /> },

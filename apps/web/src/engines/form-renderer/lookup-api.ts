@@ -29,8 +29,11 @@ function qs(params: [string, string | number | undefined][]) {
 /** One options feed for every lookup source. Masters use /masters/:key/options (repeated filter/include/attrs). */
 export async function fetchOptions(source: LookupSourceDef, req: OptionsRequest): Promise<OptionRow[]> {
   if (source.kind === 'master') {
-    // filter=category: (empty) -> [] on the server; short-circuit to save the call.
-    if (req.filter?.some(f => f.endsWith(':'))) return [];
+    // Strip empty filters (e.g. category not chosen yet) instead of returning [] —
+    // lets the item picker show all items when no category is selected.
+    if (req.filter?.some(f => f.endsWith(':'))) {
+      req = { ...req, filter: req.filter!.filter(f => !f.endsWith(':')) };
+    }
     const params: [string, string | number | undefined][] = [['q', req.q?.trim() || undefined], ['limit', req.limit ?? 30]];
     req.filter?.forEach(f => params.push(['filter', f]));
     req.include?.forEach(id => params.push(['include', id]));

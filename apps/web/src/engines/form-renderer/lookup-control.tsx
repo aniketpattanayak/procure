@@ -67,7 +67,7 @@ export function LookupControl({ field, value, onChange, scope, id, readOnly, com
   const options = useQuery({
     queryKey: ['lookup', sourceKey(field.source), dq, filters, attrs],
     queryFn: ({ signal }) => fetchOptions(field.source, { q: dq, filter: filters, attrs, signal }),
-    enabled: open && !missing && !readOnly,
+    enabled: open && !readOnly,
     staleTime: 30_000,
   });
   const remember = ctx.rememberOptions;
@@ -108,7 +108,7 @@ export function LookupControl({ field, value, onChange, scope, id, readOnly, com
         errorText={options.error ? (isApiError(options.error) ? options.error.message : t('fr.lookup.error')) : null}
         emptyText={dq ? t('fr.lookup.noMatch', { q: dq }) : parents.length ? t('fr.lookup.noneForParent', { label: parents.map(x => x.label).join(', ') }) : t('fr.lookup.none')}
         placeholder={missing ? hint : (field.placeholder ?? t('fr.lookup.placeholder'))}
-        disabled={!!missing && ids.length === 0}
+        disabled={false}
         readOnly={readOnly}
         compact={compact}
         testId={testId}
