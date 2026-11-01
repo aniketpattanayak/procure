@@ -92,13 +92,13 @@ function IndentItemStockPanel({ p }: { p: DocFormBannerProps }) {
   });
   const recentIndents = useQuery({
     queryKey: ['indent-recent-item', itemId],
-    queryFn: () => docsApi.list('indent', { view: 'document', item: itemId, sort: '-date' } as Record<string, unknown>, null, 3),
+    queryFn: () => docsApi.list('indent', { view: 'document', item: itemId, sort: '-date' }, null, 3),
     enabled: !!itemId,
     staleTime: 60_000,
   });
   const recentPos = useQuery({
     queryKey: ['po-recent-item', itemId],
-    queryFn: () => docsApi.list('po', { view: 'document', item: itemId, sort: '-date' } as Record<string, unknown>, null, 3),
+    queryFn: () => docsApi.list('po', { view: 'document', item: itemId, sort: '-date' }, null, 3),
     enabled: !!itemId && perm.has('doc.po:action.view'),
     staleTime: 60_000,
   });
