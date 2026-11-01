@@ -20,6 +20,7 @@
     "@node-rs/argon2": "^2.0.0",
     "@procure/formula": "workspace:*",
     "@procure/schema": "workspace:*",
+    "@sparticuz/chromium": "^153.0.0",
     "bullmq": "5.34.0",
     "cookie-parser": "^1.4.7",
     "csv-parse": "7.0.3",

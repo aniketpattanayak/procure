@@ -15,7 +15,7 @@ import { config } from '../../core/config';
  * Executable: PDF_CHROMIUM_PATH, else the first chromium under PLAYWRIGHT_BROWSERS_PATH.
  */
 export const RENDER_ORIGIN = 'https://pdf.render.invalid';
-export const PDF_TIMEOUT_MS = 20_000;
+export const PDF_TIMEOUT_MS = 60_000;
 export const MAX_CONCURRENT_PAGES = 3;
 const FILE_PATH = /^\/api\/v1\/files\/([0-9a-f-]{36})\/content$/i;
 
@@ -75,10 +75,13 @@ export class PdfRenderer implements OnApplicationShutdown {
     if (!this.launching) {
       this.launching = (async () => {
         const { chromium } = await import('playwright-core');
+        const sparticuz = await import('@sparticuz/chromium').then(m => m.default).catch(() => null);
+        const executablePath = chromiumPath() ?? (sparticuz ? await sparticuz.executablePath() : undefined);
+        const sparticuzArgs = sparticuz?.args ?? [];
         const b = await chromium.launch({
-          executablePath: chromiumPath(),
+          executablePath,
           headless: true,
-          args: ['--disable-gpu', '--disable-dev-shm-usage', '--no-first-run', '--disable-extensions', '--disable-background-networking', '--disable-sync'],
+          args: [...sparticuzArgs, '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run', '--disable-extensions', '--disable-background-networking', '--disable-sync', '--no-sandbox'],
         });
         this.launches++;
         b.on('disconnected', () => {
