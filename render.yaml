@@ -59,13 +59,3 @@ services:
     envVars:
       - key: NEXT_PUBLIC_API_URL
         value: https://procure-api-2g2v.onrender.com/api/v1
-
-  # ── Keep-alive cron (free tier: ping API every 14 min so Chromium stays warm for PDF) ──
-  - type: cron
-    name: procure-api-keepalive
-    runtime: image
-    image:
-      url: curlimages/curl:8.10.1
-    schedule: "*/14 * * * *"
-    command: curl -sf https://procure-api-2g2v.onrender.com/health
-    plan: free
