@@ -222,6 +222,8 @@ export interface DocListRow {
   id: string; number: string | null; statusKey: string; statusLabel: string; docDate: string;
   location: { id: string; name: string }; totalAmount: string | null; lineCount: number;
   createdBy: string | null; createdAt: string; submittedAt: string | null;
+  /** Quantity buckets summed across all lines of this document. */
+  qty: QuantityBuckets;
   /** Requested columns from custom fields: key -> display value. */
   columns: Record<string, unknown>;
   overdue: boolean;

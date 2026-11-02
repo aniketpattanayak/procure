@@ -222,6 +222,20 @@ export class DocListService {
         .select(['d.id', 'd.number', 'd.status_key', 'd.doc_date', 'd.location_node_id', 'loc.name as loc_name', 'd.total_amount', 'd.custom', 'd.required_by', 'd.party_id',
           'd.form_version_id', 'd.created_at', 'd.submitted_at', 'u.name as created_by_name'])
         .select(sql<string>`(select count(*) from app.document_line x where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted)::text`.as('line_count'))
+        .select(sql<string>`coalesce((select sum(s.requested) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_requested'))
+        .select(sql<string>`coalesce((select sum(s.approved) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_approved'))
+        .select(sql<string>`coalesce((select sum(s.held) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_held'))
+        .select(sql<string>`coalesce((select sum(s.rejected) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_rejected'))
+        .select(sql<string>`coalesce((select sum(s.cancelled) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_cancelled'))
+        .select(sql<string>`coalesce((select sum(s.short_closed) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_short_closed'))
+        .select(sql<string>`coalesce((select sum(s.over_approved) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_over_approved'))
+        .select(sql<string>`coalesce((select sum(s.selected) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_selected'))
+        .select(sql<string>`coalesce((select sum(s.ordered) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_ordered'))
+        .select(sql<string>`coalesce((select sum(s.received) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_received'))
+        .select(sql<string>`coalesce((select sum(s.accepted) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_accepted'))
+        .select(sql<string>`coalesce((select sum(s.rejected_at_receipt) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_rejected_at_receipt'))
+        .select(sql<string>`coalesce((select sum(s.issued) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_issued'))
+        .select(sql<string>`coalesce((select sum(s.returned) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_returned'))
         .select(sql<boolean>`exists (select 1 from app.wf_instance i join app.wf_stage_state ss on ss.tenant_id = i.tenant_id and ss.instance_id = i.id
             where i.tenant_id = d.tenant_id and i.document_id = d.id and i.status = 'running' and ss.status = 'active' and ss.due_at < now())`.as('overdue'))
         .select(sql<string | null>`(${sort.expr})::text`.as('sort_value'))
@@ -241,7 +255,9 @@ export class DocListService {
           id: r.id, number: r.number, statusKey: r.status_key, statusLabel: statusLabel(r.status_key, info.labels), docDate: dateStr(r.doc_date)!,
           location: { id: r.location_node_id, name: r.loc_name }, totalAmount: r.total_amount === null || hidden.header.has('total_amount') ? null : String(r.total_amount),
           lineCount: Number(r.line_count), createdBy: r.created_by_name ?? null, createdAt: new Date(r.created_at).toISOString(),
-          submittedAt: r.submitted_at ? new Date(r.submitted_at).toISOString() : null, columns: display[i]!, overdue: !!r.overdue,
+          submittedAt: r.submitted_at ? new Date(r.submitted_at).toISOString() : null,
+          qty: toQuantityBuckets(bucketsFromRow({ requested: r.qty_requested, approved: r.qty_approved, held: r.qty_held, rejected: r.qty_rejected, cancelled: r.qty_cancelled, short_closed: r.qty_short_closed, over_approved: r.qty_over_approved, selected: r.qty_selected, ordered: r.qty_ordered, received: r.qty_received, accepted: r.qty_accepted, rejected_at_receipt: r.qty_rejected_at_receipt, issued: r.qty_issued, returned: r.qty_returned })),
+          columns: display[i]!, overdue: !!r.overdue,
         })),
         nextCursor: more && last ? encodeCursor(last.sort_value, last.id) : null,
       };

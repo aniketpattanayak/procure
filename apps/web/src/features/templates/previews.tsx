@@ -6,7 +6,7 @@ import { t } from '@/i18n';
 import type { PdfOptions } from '@/features/notify/api';
 
 const PX_PER_MM = 96 / 25.4;
-export const PAPER_MM: Record<PdfOptions['format'], [number, number]> = { A4: [210, 297], A5: [148, 210], Letter: [215.9, 279.4], Legal: [215.9, 355.6] };
+export const PAPER_MM: Record<PdfOptions['format'], [number, number]> = { A4: [210, 297], A3: [297, 420], A2: [420, 594], A1: [594, 841], A5: [148, 210], Letter: [215.9, 279.4], Legal: [215.9, 355.6], Tabloid: [279.4, 431.8] };
 
 function useWidth<T extends HTMLElement>() {
   const ref = useRef<T>(null);
