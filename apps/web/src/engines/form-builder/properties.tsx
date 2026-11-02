@@ -127,7 +127,8 @@ function DataFieldProps({ field, sel, update, def, scopeDef, system, published, 
     .filter(f => (f.type === 'lookup' || f.type === 'select' || f.type === 'radio') && f.key !== field.key)
     .map(f => ({ key: f.key, label: rowOf && siblings.includes(f as GridColumn) ? `${f.label} (${t('fx.thisRow')})` : f.label }));
   const autofillTargets = [...siblings, ...headerData]
-    .filter(f => f.key !== field.key && f.type !== 'formula' && f.type !== 'lookup' && f.type !== 'multilookup')
+    // Lookups are valid targets too (e.g. the item's category into this row's Category lookup); the server checks it.
+    .filter(f => f.key !== field.key && f.type !== 'formula' && f.type !== 'multilookup')
     .map(f => ({ key: f.key, label: f.label }));
 
   return (
