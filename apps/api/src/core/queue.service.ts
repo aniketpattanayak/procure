@@ -14,6 +14,19 @@ export type Processor = (job: Job) => Promise<unknown>;
 
 export interface RepeatSpec { every?: number; pattern?: string } // ms interval or cron pattern (UTC)
 
+/** Build a BullMQ/ioredis connection config from a Redis URL.
+ *  When the URL uses the rediss:// scheme (TLS — e.g. Upstash), ioredis needs an explicit
+ *  `tls: {}` object and `enableOfflineQueue: false` to avoid silent hangs on connection loss.
+ */
+function buildConnection(redisUrl: string): Record<string, unknown> {
+  const isTls = redisUrl.startsWith('rediss://');
+  return {
+    url: redisUrl,
+    maxRetriesPerRequest: null as null,
+    ...(isTls ? { tls: {}, enableOfflineQueue: false } : {}),
+  };
+}
+
 @Injectable()
 export class QueueService implements BeforeApplicationShutdown {
   private readonly log = new Logger('Queue');
@@ -22,7 +35,7 @@ export class QueueService implements BeforeApplicationShutdown {
   private readonly repeats: { queue: string; name: string; spec: RepeatSpec; data: unknown }[] = [];
   private readonly workers: Worker[] = [];
   private started = false;
-  private readonly connection = { url: config.redisUrl, maxRetriesPerRequest: null as null };
+  private readonly connection = buildConnection(config.redisUrl);
   private readonly prefix = `procure:${config.env}`;
 
   queue(name: string): Queue {
