@@ -6,7 +6,11 @@ import { config } from './config';
 @Injectable()
 export class RedisService implements OnApplicationShutdown {
   private readonly log = new Logger('Redis');
-  readonly client = new Redis(config.redisUrl, { lazyConnect: false, maxRetriesPerRequest: 2 });
+  readonly client = new Redis(config.redisUrl, {
+    lazyConnect: false,
+    maxRetriesPerRequest: 2,
+    tls: config.redisUrl.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
+  });
   private lastErrorLog = 0;
 
   constructor() {
