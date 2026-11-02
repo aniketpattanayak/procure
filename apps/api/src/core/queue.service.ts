@@ -15,13 +15,19 @@ export type Processor = (job: Job) => Promise<unknown>;
 export interface RepeatSpec { every?: number; pattern?: string } // ms interval or cron pattern (UTC)
 
 /** Build a BullMQ/ioredis connection config from a Redis URL.
- *  When the URL uses the rediss:// scheme (TLS — e.g. Upstash), ioredis needs an explicit
- *  `tls: {}` object and `enableOfflineQueue: false` to avoid silent hangs on connection loss.
+ *  BullMQ passes the `connection` object directly to ioredis as RedisOptions — it does NOT support a
+ *  `url` field. For TLS connections (rediss:// scheme, e.g. Upstash) we must parse the URL ourselves
+ *  and return explicit host/port/password/tls fields. Without `tls: {}` the TLS handshake silently
+ *  fails and the worker never consumes any jobs.
  */
 function buildConnection(redisUrl: string): Record<string, unknown> {
-  const isTls = redisUrl.startsWith('rediss://');
+  const parsed = new URL(redisUrl);
+  const isTls = parsed.protocol === 'rediss:';
   return {
-    url: redisUrl,
+    host: parsed.hostname,
+    port: parseInt(parsed.port || (isTls ? '6380' : '6379'), 10),
+    ...(parsed.password ? { password: decodeURIComponent(parsed.password) } : {}),
+    ...(parsed.username && parsed.username !== 'default' ? { username: parsed.username } : {}),
     maxRetriesPerRequest: null as null,
     ...(isTls ? { tls: {}, enableOfflineQueue: false } : {}),
   };
