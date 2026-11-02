@@ -163,7 +163,12 @@ export class RecordEngine {
             const t = targets.get(id);
             if (!t) continue;
             if (isEmpty(parent)) {
-              errors.push({ path: l.path, message: `${l.f.label}: choose ${labelOf(all, flt.field)} first.` });
+              // Only require parent when the item itself has a value for the target field.
+              // Items without a category should not be blocked by this filter.
+              const itemAttr = t.attrs[flt.targetField];
+              if (!isEmpty(itemAttr)) {
+                errors.push({ path: l.path, message: `${l.f.label}: choose ${labelOf(all, flt.field)} first.` });
+              }
               continue;
             }
             const attr = t.attrs[flt.targetField];

@@ -43,7 +43,7 @@ services:
       - key: COOKIE_SECURE
         value: "true"
       - key: RUN_WORKERS
-        value: off
+        value: inline
       - key: STORAGE_DRIVER
         value: local
       - key: WEB_ORIGIN
