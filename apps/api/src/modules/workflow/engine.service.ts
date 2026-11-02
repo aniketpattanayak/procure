@@ -479,17 +479,38 @@ export class EngineService {
       seen.add(d.lineId);
       const pending = pendingOf(d.lineId);
       const a = D(d.approve); const h = D(d.hold); const r = D(d.reject);
-      if (!pending.gt(0) || !a.plus(h).plus(r).eq(pending)) {
-        throw new AppError(409, 'QTY_CHANGED', `Line ${lineNo.get(d.lineId) ?? '?'}: approve + hold + reject must equal the pending quantity ${fmt(pending)}. Reload and try again.`,
-          { lineId: d.lineId, pending: fmt(pending) });
+      const total = a.plus(h).plus(r);
+      const ln = lineNo.get(d.lineId) ?? '?';
+      let extra = ZERO;
+      if (stage.quorum === 'all') {
+        // Quorum votes are merged against the full pending qty: every vote still covers it exactly.
+        if (!pending.gt(0) || !total.eq(pending)) {
+          throw new AppError(409, 'QTY_CHANGED', `Line ${ln}: approve + hold + reject must equal the pending quantity ${fmt(pending)}. Reload and try again.`,
+            { lineId: d.lineId, pending: fmt(pending) });
+        }
+      } else {
+        // Partial decisions: whatever is not decided stays pending at this stage.
+        if (!pending.gt(0) || !total.gt(0)) {
+          throw new AppError(409, 'QTY_CHANGED', `Line ${ln}: enter a quantity to decide (pending ${fmt(pending)}). Reload and try again.`, { lineId: d.lineId, pending: fmt(pending) });
+        }
+        if (h.plus(r).gt(pending)) {
+          throw new AppError(409, 'QTY_CHANGED', `Line ${ln}: hold + reject cannot be more than the pending quantity ${fmt(pending)}.`, { lineId: d.lineId, pending: fmt(pending) });
+        }
+        // Approving more than pending adds the difference to the line (indents only; it carries on to later stages).
+        if (total.gt(pending)) {
+          if (st.snap.docTypeKey !== 'indent') {
+            throw new AppError(409, 'QTY_CHANGED', `Line ${ln}: you cannot approve more than the pending quantity ${fmt(pending)} here.`, { lineId: d.lineId, pending: fmt(pending) });
+          }
+          extra = total.minus(pending);
+        }
       }
       if (a.gt(0)) this.requireAction(stage, 'approve');
       if (h.gt(0)) this.requireAction(stage, 'hold');
       if (r.gt(0)) this.requireAction(stage, 'reject');
       const reason = d.reason?.trim() || input.comment?.trim() || null;
-      const partial = a.gt(0) && a.lt(pending);
+      // A reduction (quorum stages only: approve below pending, rest rejected) needs a reason unless the stage dropped 'partial'.
+      const partial = stage.quorum === 'all' && a.gt(0) && a.lt(pending);
       const rro = stage.requireReasonOn as string[];
-      // A reduction (approve below pending) needs a reason unless the stage dropped 'partial' from requireReasonOn.
       const needs = (r.gt(0) && rro.includes('reject')) || (h.gt(0) && rro.includes('hold')) || (partial && rro.includes('partial'));
       if (needs && !reason) throw new AppError(400, 'REASON_REQUIRED', `Line ${lineNo.get(d.lineId) ?? '?'}: give a reason for this decision.`, { lineId: d.lineId });
       if (d.values && Object.keys(d.values).length) {
@@ -497,6 +518,7 @@ export class EngineService {
         if (bad.length) throw new AppError(400, 'VALIDATION_FAILED', `These fields cannot be changed at ${stage.name}: ${bad.join(', ')}.`, { fields: bad });
       }
       out.push({ lineId: d.lineId, lineNo: lineNo.get(d.lineId), pending: fmt(pending), approve: fmt(a), hold: fmt(h), reject: fmt(r), reason,
+        ...(extra.gt(0) ? { extra: fmt(extra) } : {}),
         ...(d.values && Object.keys(d.values).length ? { values: d.values } : {}) });
     }
     return out;
@@ -577,6 +599,12 @@ export class EngineService {
       const l = this.lineOf(st, d.lineId);
       st.touchedLines.add(d.lineId);
       const a = D(d.approve); const h = D(d.hold); const r = D(d.reject);
+      // Approved above pending (indents): the extra joins the line first (requested +extra), then flows like the rest.
+      const x = D(d.extra ?? 0);
+      if (x.gt(0)) {
+        enter(l, g.stages, x);
+        st.ledger.push({ lineId: d.lineId, type: 'requested', qty: fmt(x), stageKey: stage.key, reason: d.reason ?? `Increased at ${stage.name}` });
+      }
       const qBefore = groupQty(l, g);
       const c = cell(l, stage.key);
       c.p = c.p.minus(a).minus(h).minus(r);

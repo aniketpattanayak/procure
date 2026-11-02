@@ -141,6 +141,8 @@ export const QTY_RE = /^\d+(\.\d+)?$/;
 export interface AppliedDecision {
   lineId: string; lineNo?: number; pending: string; approve: string; hold: string; reject: string; reason: string | null;
   values?: Record<string, unknown>; vote?: boolean;
+  /** Approved above pending (indents): qty added to the line at this decision. */
+  extra?: string;
 }
 
 /** Merge of quorum-'all' votes for one line: approve = min, reject = max (bounded), hold = the rest. */
