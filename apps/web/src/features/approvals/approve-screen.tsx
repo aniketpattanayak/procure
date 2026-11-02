@@ -126,6 +126,17 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
     return m;
   }, [drafts, actions]);
   const summary = useMemo(() => summarize(drafts, lid => { const l = lineById.get(lid); return l ? lineUom(l) : ''; }), [drafts, lineById]);
+  /** Totals across ALL lines (not just pending drafts) — approved/held/rejected/pendingApproval */
+  const lineQtySummary = useMemo(() => {
+    let approved = '0', held = '0', rejected = '0', pending = '0';
+    for (const l of doc.lines) {
+      approved = dec.add(approved, l.qty.approved);
+      held = dec.add(held, l.qty.held);
+      rejected = dec.add(rejected, l.qty.rejected);
+      pending = dec.add(pending, l.qty.pendingApproval);
+    }
+    return { approved, held, rejected, pending };
+  }, [doc.lines]);
   const toSend = drafts.filter(d => outcome(d) !== 'skip').length;
 
   // ------------------------------------------------------------------ actions
@@ -277,6 +288,9 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
           </button>
         </div>
 
+        {/* Qty totals strip — always shown so user can see overall status at a glance */}
+        <QtySummaryStrip approved={lineQtySummary.approved} held={lineQtySummary.held} rejected={lineQtySummary.rejected} pending={lineQtySummary.pending} />
+
         {granularity === 'document' ? (
           <DocumentDecision doc={doc} stage={stage} actions={actions} busy={!!busy} onDecide={async (o, reason) => {
             const next = await run('decide', { action: 'decide', stageKey: stage.key, decisions: [], outcome: o, ...(reason ? { comment: reason } : {}) });
@@ -386,6 +400,44 @@ const toggleSel = (set: Dispatch<SetStateAction<Set<string>>>) => (id: string) =
 
 function focusReason(lineNo: number) {
   requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`[data-testid="decision-${lineNo}-reason"]`)?.focus());
+}
+
+/** Compact banner showing total approved/held/rejected/pending across all doc lines. */
+function QtySummaryStrip({ approved, held, rejected, pending }: { approved: string; held: string; rejected: string; pending: string }) {
+  const hasAny = dec.gt0(approved) || dec.gt0(held) || dec.gt0(rejected) || dec.gt0(pending);
+  if (!hasAny) return null;
+  return (
+    <div className="mb-4 flex flex-wrap gap-x-5 gap-y-1.5 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm" data-testid="approve-qty-summary">
+      {dec.gt0(approved) && (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-success" aria-hidden />
+          <span className="text-fg-muted">Approved</span>
+          <span className="font-semibold tabular-nums text-success">{fmtQty(approved)}</span>
+        </span>
+      )}
+      {dec.gt0(held) && (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-warning-bar" aria-hidden />
+          <span className="text-fg-muted">Held</span>
+          <span className="font-semibold tabular-nums text-warning">{fmtQty(held)}</span>
+        </span>
+      )}
+      {dec.gt0(rejected) && (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-danger" aria-hidden />
+          <span className="text-fg-muted">Rejected</span>
+          <span className="font-semibold tabular-nums text-danger">{fmtQty(rejected)}</span>
+        </span>
+      )}
+      {dec.gt0(pending) && (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-fg-subtle" aria-hidden />
+          <span className="text-fg-muted">Pending</span>
+          <span className="font-semibold tabular-nums">{fmtQty(pending)}</span>
+        </span>
+      )}
+    </div>
+  );
 }
 
 function SummaryText({ s }: { s: ReturnType<typeof summarize> }) {
