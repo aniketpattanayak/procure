@@ -9,6 +9,7 @@ import {
   APPROVAL_PENDING_BODY, APPROVAL_PENDING_TITLE, COMPARISON_BODY, GENERIC_BODY, GENERIC_FOOTER, INDENT_BODY, INDENT_FOOTER, PO_BODY, PO_BODY_PREVIOUS, PO_EMAIL_BODY,
   PO_EMAIL_SUBJECT, PO_FOOTER, RTV_DEBIT_NOTE_BODY, RTV_DEBIT_NOTE_FOOTER,
 } from './bodies';
+import { JEEVAKA_PO_BODY, JEEVAKA_PO_FOOTER } from './jeevaka';
 
 export interface StarterTemplate {
   channel: 'pdf' | 'email' | 'whatsapp' | 'inapp';
@@ -36,6 +37,7 @@ export const STARTER_KEYS = {
   poApprovedEmail: 'po_approved_vendor', approvalPendingInapp: 'approval_pending',
   // Phase 5 (GRN agent): debit note of a return to vendor.
   rtvDebitNote: 'rtv_debit_note',
+  jeevakaPoPdf: 'po_jeevaka',
 } as const;
 
 export const STARTER_TEMPLATES: StarterTemplate[] = [
@@ -57,6 +59,8 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
   },
   // Phase 5 (GRN agent)
   { channel: 'pdf', docTypeKey: 'rtv', key: STARTER_KEYS.rtvDebitNote, name: 'Debit note (return to vendor)', body: RTV_DEBIT_NOTE_BODY, pdfOptions: A4(RTV_DEBIT_NOTE_FOOTER), isDefault: true },
+  // Jeevaka tenant-specific PO template (exact company format).
+  { channel: 'pdf', docTypeKey: 'po', key: STARTER_KEYS.jeevakaPoPdf, name: 'Purchase order (Jeevaka)', body: JEEVAKA_PO_BODY, pdfOptions: A4(JEEVAKA_PO_FOOTER), isDefault: false },
 ];
 
 /**
