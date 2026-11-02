@@ -20,7 +20,7 @@ export const MAX_CONCURRENT_PAGES = 3;
 const FILE_PATH = /^\/api\/v1\/files\/([0-9a-f-]{36})\/content$/i;
 
 export interface PdfRenderOptions {
-  format: 'A4' | 'A5' | 'Letter' | 'Legal';
+  format: 'A4' | 'A3' | 'A2' | 'A1' | 'A5' | 'Letter' | 'Legal' | 'Tabloid';
   landscape: boolean;
   marginMm: { top: number; right: number; bottom: number; left: number };
   headerHtml?: string | null;

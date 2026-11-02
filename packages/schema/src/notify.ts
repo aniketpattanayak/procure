@@ -34,7 +34,7 @@ export const TemplateInput = z.object({
   whatsappTemplateId: Uuid.optional(),
   whatsappVariables: z.array(z.object({ index: z.number().int().min(1).max(20), expr: z.string().max(300) })).max(20).default([]),
   pdfOptions: z.object({
-    format: z.enum(['A4', 'A5', 'Letter', 'Legal']).default('A4'),
+    format: z.enum(['A4', 'A3', 'A2', 'A1', 'A5', 'Letter', 'Legal', 'Tabloid']).default('A4'),
     landscape: z.boolean().default(false),
     marginMm: z.object({ top: z.number().min(0).max(50), right: z.number().min(0).max(50), bottom: z.number().min(0).max(50), left: z.number().min(0).max(50) }).default({ top: 15, right: 12, bottom: 15, left: 12 }),
     headerHtml: z.string().max(20_000).optional(),
