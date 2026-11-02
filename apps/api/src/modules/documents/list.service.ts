@@ -7,7 +7,7 @@ import { AppError } from '../../core/errors';
 import { getTenantSetting } from '../identity';
 import { canonicalDecimal, isGrid, RecordEngine } from '../forms';
 import { scopeCondition } from '../permissions';
-import { bucketsFromRow, toQuantityBuckets } from './qty';
+import { bucketsFromRow, qty, toQuantityBuckets } from './qty';
 import { stageOfStatus, statusLabel } from './status';
 import { dateStr, DocStore, FormBundle, numForField } from './store';
 import { DocActor, docAction, DocTypeRow, docView, has, settingsOf } from './types';
@@ -223,6 +223,7 @@ export class DocListService {
           'd.form_version_id', 'd.created_at', 'd.submitted_at', 'u.name as created_by_name'])
         .select(sql<string>`(select count(*) from app.document_line x where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted)::text`.as('line_count'))
         .select(sql<string>`coalesce((select sum(s.requested) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_requested'))
+        .select(sql<string>`coalesce((select sum(x.qty) from app.document_line x where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_requested_orig'))
         .select(sql<string>`coalesce((select sum(s.approved) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_approved'))
         .select(sql<string>`coalesce((select sum(s.held) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_held'))
         .select(sql<string>`coalesce((select sum(s.rejected) from app.document_line x join app.line_qty_summary s on s.line_id = x.id where x.tenant_id = d.tenant_id and x.document_id = d.id and not x.is_deleted), 0)::text`.as('qty_rejected'))
@@ -256,6 +257,7 @@ export class DocListService {
           location: { id: r.location_node_id, name: r.loc_name }, totalAmount: r.total_amount === null || hidden.header.has('total_amount') ? null : String(r.total_amount),
           lineCount: Number(r.line_count), createdBy: r.created_by_name ?? null, createdAt: new Date(r.created_at).toISOString(),
           submittedAt: r.submitted_at ? new Date(r.submitted_at).toISOString() : null,
+          requestedQty: qty(r.qty_requested_orig),
           qty: toQuantityBuckets(bucketsFromRow({ requested: r.qty_requested, approved: r.qty_approved, held: r.qty_held, rejected: r.qty_rejected, cancelled: r.qty_cancelled, short_closed: r.qty_short_closed, over_approved: r.qty_over_approved, selected: r.qty_selected, ordered: r.qty_ordered, received: r.qty_received, accepted: r.qty_accepted, rejected_at_receipt: r.qty_rejected_at_receipt, issued: r.qty_issued, returned: r.qty_returned })),
           columns: display[i]!, overdue: !!r.overdue,
         })),

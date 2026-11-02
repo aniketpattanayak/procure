@@ -224,6 +224,8 @@ export interface DocListRow {
   createdBy: string | null; createdAt: string; submittedAt: string | null;
   /** Quantity buckets summed across all lines of this document. */
   qty: QuantityBuckets;
+  /** Original qty asked for (sum of line qty); unaffected by approvals. */
+  requestedQty: string;
   /** Requested columns from custom fields: key -> display value. */
   columns: Record<string, unknown>;
   overdue: boolean;

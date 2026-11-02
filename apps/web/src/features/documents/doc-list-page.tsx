@@ -139,7 +139,7 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
   }), [filters.sort]);
 
   const docColumns = useMemo<DataTableColumn<DocListRow>[]>(() => {
-    const show = new Set([...docType.settings.documentColumns, 'qty_approved', 'qty_held', 'qty_rejected', 'qty_pending']);
+    const show = new Set([...docType.settings.documentColumns, 'qty_requested', 'qty_approved', 'qty_held', 'qty_rejected', 'qty_pending']);
     const col = (c: DataTableColumn<DocListRow>): DataTableColumn<DocListRow> => ({ ...c, defaultHidden: !show.has(c.id) && !c.alwaysVisible });
     const cols: DataTableColumn<DocListRow>[] = [
       col({ id: 'number', label: docType.settings.numberLabel || t('docs.col.number'), header: () => sortHeader('number', docType.settings.numberLabel || t('docs.col.number')), width: 190, alwaysVisible: true,
@@ -155,6 +155,7 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
       col({ id: 'total_amount', label: t('docs.col.total'), header: () => sortHeader('total_amount', t('docs.col.total'), 'right'), width: 140, align: 'right',
         cell: ({ row }) => row.original.totalAmount ? formatDecimal(row.original.totalAmount, 2, { currency }) : '—' }),
       col({ id: 'line_count', label: t('docs.col.lines'), header: t('docs.col.lines'), width: 80, align: 'right', cell: ({ row }) => row.original.lineCount }),
+      col({ id: 'qty_requested', label: t('docs.qty.requested'), header: t('docs.qty.requested'), width: 96, align: 'right', cell: ({ row }) => { const r = row.original as DocListRow; return <QtyCell value={r.requestedQty} testId={`qty-requested-${r.id}`} />; } }),
       col({ id: 'qty_approved', label: t('docs.qty.approved'), header: t('docs.qty.approved'), width: 96, align: 'right', cell: ({ row }) => { const r = row.original as DocListRow; return <QtyCell value={r.qty.approved} tone="success" testId={`qty-approved-${r.id}`} />; } }),
       col({ id: 'qty_held', label: t('docs.qty.held'), header: t('docs.qty.held'), width: 96, align: 'right', cell: ({ row }) => { const r = row.original as DocListRow; return <QtyCell value={r.qty.held} tone="warning" testId={`qty-held-${r.id}`} />; } }),
       col({ id: 'qty_rejected', label: t('docs.qty.rejected'), header: t('docs.qty.rejected'), width: 96, align: 'right', cell: ({ row }) => { const r = row.original as DocListRow; return <QtyCell value={r.qty.rejected} tone="danger" testId={`qty-rejected-${r.id}`} />; } }),
