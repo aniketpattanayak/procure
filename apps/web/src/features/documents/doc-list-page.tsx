@@ -184,7 +184,7 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
           </Link>
         ) }),
       col({ id: 'line_no', label: t('docs.col.lineNo'), header: () => sortHeader('line_no', '#', 'right'), width: 56, align: 'right', cell: ({ row }) => <span className="text-fg-muted">{row.original.lineNo}</span> }),
-      col({ id: 'item', label: t('docs.col.item'), header: () => sortHeader('item', t('docs.col.item')), width: 240, cell: ({ row }) => row.original.item ? <span className="truncate"><span className="text-fg-muted">{row.original.item.code}</span> {row.original.item.name}</span> : '—' }),
+      col({ id: 'item', label: t('docs.col.item'), header: () => sortHeader('item', t('docs.col.item')), width: 240, cell: ({ row }) => row.original.item ? <span className="truncate">{row.original.item.name}</span> : '—' }),
       col({ id: 'uom', label: t('docs.col.uom'), header: t('docs.col.uom'), width: 70, cell: ({ row }) => row.original.uom ?? '—' }),
       { ...q('qty', t('docs.qty.requested'), 'requested'), header: () => sortHeader('qty', t('docs.qty.requested'), 'right') },
       q('approved', t('docs.qty.approved'), 'approved', 'success'),

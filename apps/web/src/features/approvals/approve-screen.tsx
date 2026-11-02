@@ -25,6 +25,7 @@ import { isApiError, type ApiError } from '@/lib/api';
 import {
   initDraft, setQty, type Bucket, type LineDraft,
 } from './decision-model';
+import { ConfirmDecisionDialog, type ConfirmRow } from './confirm-dialog';
 import { ForwardDialog, SendBackDialog, ShortcutsDialog } from './stage-dialogs';
 
 const VIRTUAL_AFTER = 50;
@@ -195,13 +196,28 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
         ...(d.values && Object.keys(d.values).length ? { values: d.values } : {}),
       };
     });
-    const next = await run(`decide:${b}`, { action: 'decide', stageKey: stage.key, decisions, ...(comment.trim() ? { comment: comment.trim() } : {}) });
+    // Nothing is saved yet: the overview popup asks for confirmation first.
+    setConfirm({
+      kind: b, decisions, reason,
+      rows: rows.map(d => {
+        const l = lineById.get(d.lineId);
+        return { key: d.lineId, doc: doc.number ?? '', item: l ? lineItemLabel(l) : `#${d.lineNo}`, uom: l ? lineUom(l) : '', pending: d.pending, qty: dec.norm(qtys[d.lineId]!.trim()) };
+      }),
+    });
+  }, [busy, drafts, qtys, canExceed, bulkReason, lineById, doc.number]);
+
+  const [confirm, setConfirm] = useState<{ kind: Bucket; reason: string; rows: ConfirmRow[]; decisions: Extract<WorkflowActionInput, { action: 'decide' }>['decisions'] } | null>(null);
+  const send = useCallback(async () => {
+    if (!confirm) return;
+    const next = await run(`decide:${confirm.kind}`, { action: 'decide', stageKey: stage.key, decisions: confirm.decisions, ...(comment.trim() ? { comment: comment.trim() } : {}) });
+    const n = confirm.rows.length; const b = confirm.kind;
+    setConfirm(null);
     if (next) {
       setQtys({}); setBulkReason(''); setComment('');
-      toast.success(t(b === 'approve' ? 'approve.didApprove' : b === 'hold' ? 'approve.didHold' : 'approve.didReject', { n: rows.length }));
+      toast.success(t(b === 'approve' ? 'approve.didApprove' : b === 'hold' ? 'approve.didHold' : 'approve.didReject', { n }));
       afterAction(next);
     }
-  }, [busy, drafts, qtys, canExceed, bulkReason, run, stage.key, comment, afterAction]);
+  }, [confirm, run, stage.key, comment, afterAction]);
 
   const unhold = useCallback(async (lineIds: string[]) => {
     const next = await run(`unhold:${lineIds.join(',')}`, { action: 'unhold', stageKey: stage.key, lineIds });
@@ -348,6 +364,10 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
         )}
       </div>
 
+      {confirm && (
+        <ConfirmDecisionDialog kind={confirm.kind} rows={confirm.rows} reason={confirm.reason} busy={!!busy}
+          onCancel={() => setConfirm(null)} onConfirm={() => void send()} />
+      )}
       {dialog === 'help' && <ShortcutsDialog onClose={() => setDialog(null)} />}
       {dialog === 'send_back' && (
         <SendBackDialog targets={priorStages.map(s => ({ key: s.key, name: s.name }))} onClose={() => setDialog(null)}
