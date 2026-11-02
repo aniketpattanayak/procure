@@ -86,7 +86,7 @@ test('J4: 5-line Capex — one decision approves 1–2, holds 3, rejects 4, appr
     await expect(ap.getByTestId('decision-row-2')).toHaveAttribute('data-outcome', 'approve');
     await ap.getByTestId('decision-3-set-hold').click();
     await ap.getByTestId('decision-4-set-reject').click();
-    await ap.getByTestId('decision-5-approve').fill('200');
+    await ap.getByTestId('decision-5-qty').fill('200');
     await expect(ap.getByTestId('decision-row-3')).toHaveAttribute('data-outcome', 'hold');
     await expect(ap.getByTestId('decision-row-4')).toHaveAttribute('data-outcome', 'reject');
     await expect(ap.getByTestId('decision-row-5')).toHaveAttribute('data-outcome', /reduce|mixed/);

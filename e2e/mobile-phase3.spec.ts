@@ -23,7 +23,7 @@ test('Mobile: approval screen — approve, hold, reduce on a phone; inbox; axe',
   await page.getByTestId('decision-1-set-approve').click();
   await page.getByTestId('decision-2-set-hold').click();
   await page.getByTestId('decision-2-reason').fill('Waiting for the quote');
-  await page.getByTestId('decision-3-approve').fill('6');
+  await page.getByTestId('decision-3-qty').fill('6');
   await page.getByTestId('decision-3-reason').fill('Two are enough for now');
   await expect(page.getByTestId('decision-row-3')).toHaveAttribute('data-outcome', /reduce|mixed/);
   await page.getByTestId('decision-submit').click();

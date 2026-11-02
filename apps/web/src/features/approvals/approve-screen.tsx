@@ -235,7 +235,7 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
         case 'r': if (d && actions.includes('reject')) { e.preventDefault(); update(d.lineId, x => setWhole(x, 'reject')); focusReason(d.lineNo); } break;
         case 's': if (d) { e.preventDefault(); update(d.lineId, skip); } break;
         case 'x': case ' ': if (d) { e.preventDefault(); setSelected(s => { const n = new Set(s); if (n.has(d.lineId)) n.delete(d.lineId); else n.add(d.lineId); return n; }); } break;
-        case 'e': if (d) { e.preventDefault(); document.querySelector<HTMLInputElement>(`[data-testid="decision-${d.lineNo}-approve"]`)?.select(); } break;
+        case 'e': if (d) { e.preventDefault(); document.querySelector<HTMLInputElement>(`[data-testid="decision-${d.lineNo}-qty"]`)?.select(); } break;
         case '?': e.preventDefault(); setDialog('help'); break;
       }
     };
@@ -321,9 +321,9 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
             </div>
 
             {/* Column header (wide screens) */}
-            <div className="hidden grid-cols-[2rem_2.25rem_minmax(10rem,1fr)_7rem_7.5rem_7.5rem_7.5rem_8.5rem] items-center gap-x-3 border-b border-border bg-subtle px-3 py-2 text-sm font-medium text-fg-muted md:grid" aria-hidden>
+            <div className="hidden grid-cols-[2rem_2.25rem_minmax(10rem,1fr)_7rem_9rem_8.5rem] items-center gap-x-3 border-b border-border bg-subtle px-3 py-2 text-sm font-medium text-fg-muted md:grid" aria-hidden>
               <span /><span className="text-right">#</span><span>{t('docs.col.item')}</span><span className="text-right">{t('approve.pendingHere')}</span>
-              <span className="text-right text-success">{t('approve.approve')}</span><span className="text-right text-warning">{t('approve.hold')}</span><span className="text-right text-danger">{t('approve.reject')}</span><span />
+              <span className="text-right">{t('approve.qtyToAct')}</span><span />
             </div>
 
             <div ref={listRef} role="list" aria-label={t('approve.linesLabel')} className={cn(virtual && 'overflow-y-auto')} style={virtual ? { maxHeight: 'calc(100dvh - 22rem)', minHeight: 320 } : undefined}>
@@ -652,29 +652,33 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected
     return hist.filter(e => e.kind === 'workflow');
   }, [line]);
 
-  const qtyInput = (b: Bucket) => {
-    const disabled = (b === 'hold' && !actions.includes('hold')) || (b === 'reject' && !actions.includes('reject'));
-    const label = t(`approve.${b}`);
-    return (
-      <div className="min-w-0">
-        <label htmlFor={`${id}-${b}`} className={cn('mb-1 block text-xs font-medium md:sr-only', b === 'approve' ? 'text-success' : b === 'hold' ? 'text-warning' : 'text-danger')}>{label}</label>
-        <Input
-          id={`${id}-${b}`}
-          inputMode="decimal"
-          autoComplete="off"
-          value={d[b]}
-          disabled={disabled}
-          onFocus={e => { onActivate(index); e.currentTarget.select(); }}
-          onChange={e => onUpdate(d.lineId, x => setQty(x, b, e.target.value.replace(/[^\d.]/g, '')))}
-          aria-invalid={sumOff || undefined}
-          aria-describedby={visibleError ? `${id}-err` : undefined}
-          aria-label={t('approve.qtyLabel', { what: label, n: d.lineNo })}
-          className={cn('h-11 text-right tabular-nums md:h-8', sumOff && 'border-danger')}
-          data-testid={`decision-${d.lineNo}-${b}`}
-        />
-      </div>
-    );
-  };
+  // One qty box per line: the A / H / R buttons pick what happens to it; anything less than pending is reduced.
+  const act: Bucket = dec.gt0(d.approve) ? 'approve' : dec.gt0(d.hold) ? 'hold' : dec.gt0(d.reject) ? 'reject' : 'approve';
+  const actLabel = t(`approve.${act}`);
+  const qtyInput = (
+    <div className="min-w-0">
+      <label htmlFor={`${id}-qty`} className="mb-1 block text-xs font-medium text-fg-muted md:sr-only">{t('approve.qtyToAct')}</label>
+      <Input
+        id={`${id}-qty`}
+        inputMode="decimal"
+        autoComplete="off"
+        value={o === 'skip' ? '0' : d[act]}
+        onFocus={e => { onActivate(index); e.currentTarget.select(); }}
+        onChange={e => onUpdate(d.lineId, x => setQty(x, act, e.target.value.replace(/[^\d.]/g, '')))}
+        aria-invalid={sumOff || undefined}
+        aria-describedby={visibleError ? `${id}-err` : undefined}
+        aria-label={t('approve.qtyLabel', { what: actLabel, n: d.lineNo })}
+        className={cn('h-11 text-right tabular-nums md:h-8', sumOff && 'border-danger',
+          o !== 'skip' && (act === 'approve' ? 'text-success' : act === 'hold' ? 'text-warning' : 'text-danger'))}
+        data-testid={`decision-${d.lineNo}-qty`}
+      />
+    </div>
+  );
+  // Switching action keeps the qty already typed (falls back to the whole pending qty).
+  const choose = (b: Bucket) => onUpdate(d.lineId, x => {
+    const cur = dec.gt0(x.approve) ? x.approve : dec.gt0(x.hold) ? x.hold : dec.gt0(x.reject) ? x.reject : x.pending;
+    return setQty(setWhole(x, b), b, cur);
+  });
 
   return (
     <div role="listitem" data-row-index={index} data-testid={`decision-row-${d.lineNo}`} data-outcome={o} onClick={() => onActivate(index)}
@@ -683,7 +687,7 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected
         active ? 'bg-accent-soft/60 shadow-[inset_3px_0_0_rgb(var(--c-accent))]' : 'hover:bg-subtle',
         o === 'skip' && 'bg-subtle/60',
       )}>
-      <div className="grid grid-cols-[2rem_1fr_auto] items-start gap-x-3 gap-y-3 md:grid-cols-[2rem_2.25rem_minmax(10rem,1fr)_7rem_7.5rem_7.5rem_7.5rem_8.5rem] md:items-center">
+      <div className="grid grid-cols-[2rem_1fr_auto] items-start gap-x-3 gap-y-3 md:grid-cols-[2rem_2.25rem_minmax(10rem,1fr)_7rem_9rem_8.5rem] md:items-center">
         <div className="pt-0.5 md:pt-0"><Checkbox checked={selected} onCheckedChange={() => onToggle(d.lineId)} aria-label={t('approve.selectLine', { n: d.lineNo })} data-testid={`decision-${d.lineNo}-select`} /></div>
         <span className="hidden text-right text-sm text-fg-subtle tabular-nums md:block">{d.lineNo}</span>
         <div className="min-w-0">
@@ -695,15 +699,11 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected
           <p className="text-lg font-semibold tabular-nums md:text-base" data-testid={`qty-pending-${d.lineNo}`} data-value={d.pending}>{fmtQty(d.pending)}</p>
           <p className="text-xs text-fg-subtle md:hidden">{uom || t('approve.pendingHere')}</p>
         </div>
-        <div className="order-last col-span-3 grid grid-cols-3 gap-2 md:order-none md:col-span-1 md:contents">
-          {qtyInput('approve')}
-          {qtyInput('hold')}
-          {qtyInput('reject')}
-        </div>
+        <div className="order-last col-span-3 md:order-none md:col-span-1">{qtyInput}</div>
         <div className="col-span-3 flex gap-2 md:col-span-1 md:justify-end md:gap-1">
-          <QuickButton tone="approve" label={t('approve.approve')} short="A" pressed={o === 'approve'} onClick={() => onUpdate(d.lineId, x => setWhole(x, 'approve'))} testId={`decision-${d.lineNo}-set-approve`} />
-          <QuickButton tone="hold" label={t('approve.hold')} short="H" pressed={o === 'hold'} disabled={!actions.includes('hold')} onClick={() => { onUpdate(d.lineId, x => setWhole(x, 'hold')); focusReason(d.lineNo); }} testId={`decision-${d.lineNo}-set-hold`} />
-          <QuickButton tone="reject" label={t('approve.reject')} short="R" pressed={o === 'reject'} disabled={!actions.includes('reject')} onClick={() => { onUpdate(d.lineId, x => setWhole(x, 'reject')); focusReason(d.lineNo); }} testId={`decision-${d.lineNo}-set-reject`} />
+          <QuickButton tone="approve" label={t('approve.approve')} short="A" pressed={o === 'approve'} onClick={() => choose('approve')} testId={`decision-${d.lineNo}-set-approve`} />
+          <QuickButton tone="hold" label={t('approve.hold')} short="H" pressed={o === 'hold'} disabled={!actions.includes('hold')} onClick={() => { choose('hold'); focusReason(d.lineNo); }} testId={`decision-${d.lineNo}-set-hold`} />
+          <QuickButton tone="reject" label={t('approve.reject')} short="R" pressed={o === 'reject'} disabled={!actions.includes('reject')} onClick={() => { choose('reject'); focusReason(d.lineNo); }} testId={`decision-${d.lineNo}-set-reject`} />
         </div>
       </div>
 

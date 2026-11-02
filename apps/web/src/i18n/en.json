@@ -1611,6 +1611,7 @@
   "approve.bulkReason": "Reason for hold or reject",
   "approve.shortcuts": "Shortcuts",
   "approve.pendingHere": "Pending here",
+  "approve.qtyToAct": "Qty to act on",
   "approve.linesLabel": "Lines to decide",
   "approve.requested": "Requested {qty}",
   "approve.qtyLabel": "{what} quantity, line {n}",

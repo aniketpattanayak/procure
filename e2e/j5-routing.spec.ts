@@ -93,7 +93,7 @@ test('J5: routing by amount — HOD only / + Finance (Buyer user) / + Director (
       await expect(p.getByTestId('approve-screen')).toHaveAttribute('data-stage', 'finance');
       // Finance review allows approve/reject/send back only: hold is disabled (button and qty input)
       await expect(p.getByTestId('decision-1-set-hold')).toBeDisabled();
-      await expect(p.getByTestId('decision-1-hold')).toBeDisabled();
+      await expect(p.getByTestId('decision-1-set-hold')).toBeDisabled();
       await p.getByTestId('decision-1-set-approve').click();
       await p.getByTestId('decision-submit').click();
       await p.waitForURL(new RegExp(`/docs/capex/${d.id}$`));
