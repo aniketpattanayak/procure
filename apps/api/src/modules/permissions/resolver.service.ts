@@ -18,17 +18,18 @@ export class PermissionResolverService implements PermissionResolver {
   ) {}
 
   async resolve(tenantId: string, userId: string, isTenantAdmin: boolean): Promise<ResolvedPermissions> {
-    const version = await this.cache.version(tenantId);
-    const hit = await this.cache.get(tenantId, userId, version);
+    // version() and get() are now synchronous in-memory lookups — zero Redis calls.
+    const version = this.cache.version(tenantId);
+    const hit = this.cache.get(tenantId, userId, version);
     if (hit && hit.isTenantAdmin === isTenantAdmin) return hit;
     const { perms } = await this.db.tenantTx(tenantId, async tx => compile(await this.inputs(tx, tenantId, userId, isTenantAdmin, version)));
-    await this.cache.set(tenantId, userId, version, perms);
+    this.cache.set(tenantId, userId, version, perms);
     return perms;
   }
 
   /** Full compile (with explanation) inside an existing tenant transaction; never cached. */
   async explain(tx: Tx, tenantId: string, userId: string, isTenantAdmin: boolean) {
-    const version = await this.cache.version(tenantId);
+    const version = this.cache.version(tenantId);
     return compile(await this.inputs(tx, tenantId, userId, isTenantAdmin, version));
   }
 

@@ -24,7 +24,7 @@ const TIMEOUT_MS = 10_000;
 const MAX_DELAY_MS = 6 * 60 * 60 * 1000;
 /** Delay before retry n (1-based): 30 s × 4^(n-1), capped at 6 h → 30 s, 2 m, 8 m, 32 m, 2.1 h, 6 h, 6 h, 6 h. */
 export const retryDelayMs = (n: number) => Math.min(30_000 * 4 ** (n - 1), MAX_DELAY_MS);
-const failKey = (endpointId: string) => `wh:fails:${endpointId}`;
+// failKey removed — auto-disable counter moved to in-memory (saves Redis INCR/DEL calls on every delivery).
 
 export interface TransportRequest { url: URL; address: string; family: number; body: string; headers: Record<string, string>; timeoutMs: number }
 export type Transport = (r: TransportRequest) => Promise<{ status: number; body: string }>;
@@ -75,6 +75,8 @@ export class WebhooksService implements OnModuleInit {
   /** Test seams. */
   transport: Transport = httpsTransport;
   resolver: Resolver = systemResolver;
+  /** In-memory consecutive-failure counter per endpoint (replaces Redis INCR — saves 1 Redis call per delivery). Resets on pod restart. */
+  private readonly failCounts = new Map<string, number>();
 
   constructor(
     private readonly db: DbService,
@@ -139,7 +141,7 @@ export class WebhooksService implements OnModuleInit {
     await this.validate(i);
     const r = await tx.updateTable('app.webhook_endpoint').set({ url: i.url, description: i.description ?? null, events: [...new Set(i.events)], is_active: i.isActive, version: cur.version + 1 })
       .where('id', '=', id).returning([...ENDPOINT_COLS]).executeTakeFirstOrThrow();
-    if (i.isActive && !cur.is_active) await this.redis.del(failKey(id));
+    if (i.isActive && !cur.is_active) this.failCounts.delete(id); // reset in-memory fail counter
     await this.audit.tenant(tx, { action: 'update', entity: 'webhook_endpoint', entityId: id, actorId: userId, before: { url: cur.url, events: cur.events, isActive: cur.is_active }, after: { url: i.url, events: i.events, isActive: i.isActive } });
     return toEndpoint(r as EndpointDb);
   }
@@ -148,7 +150,7 @@ export class WebhooksService implements OnModuleInit {
     const cur = await this.endpoint(tx, id, true);
     await tx.deleteFrom('app.webhook_delivery').where('endpoint_id', '=', id).execute();
     await tx.deleteFrom('app.webhook_endpoint').where('id', '=', id).execute();
-    await this.redis.del(failKey(id));
+    this.failCounts.delete(id); // reset in-memory fail counter
     await this.audit.tenant(tx, { action: 'delete', entity: 'webhook_endpoint', entityId: id, actorId: userId, before: { url: cur.url } });
   }
 
@@ -238,7 +240,7 @@ export class WebhooksService implements OnModuleInit {
     const attempts = d.attempts + 1;
     if (ok) {
       await this.finish(tenantId, d.id, { status: 'delivered', attempts, response_code: code, response_body: text, delivered_at: new Date(), next_attempt_at: null });
-      await this.redis.del(failKey(ep.id));
+      this.failCounts.delete(ep.id); // reset in-memory fail counter on success
       return 'delivered';
     }
     const last = opts.final || attempts >= WEBHOOK_MAX_ATTEMPTS;
@@ -246,8 +248,11 @@ export class WebhooksService implements OnModuleInit {
     await this.finish(tenantId, d.id, {
       status: last ? 'failed' : 'pending', attempts, response_code: code, response_body: text, next_attempt_at: last ? null : new Date(Date.now() + delay),
     });
-    const fails = await this.redis.client.incr(failKey(ep.id));
+    // In-memory fail counter — saves 1 Redis INCR per failed delivery. Resets on pod restart (acceptable for small deployments).
+    const fails = (this.failCounts.get(ep.id) ?? 0) + 1;
+    this.failCounts.set(ep.id, fails);
     if (fails >= WEBHOOK_DISABLE_AFTER) {
+      this.failCounts.delete(ep.id);
       await this.disable(tenantId, ep.id, fails);
       return last ? 'failed' : 'pending';
     }
@@ -276,7 +281,6 @@ export class WebhooksService implements OnModuleInit {
       }
       await this.audit.tenant(tx, { action: 'auto_disable', entity: 'webhook_endpoint', entityId: endpointId, actorId: null, after: { failures: fails } });
     });
-    await this.redis.del(failKey(endpointId));
     this.log.warn(`webhook ${endpointId} disabled after ${fails} consecutive failures`);
   }
 }
