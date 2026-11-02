@@ -26,6 +26,7 @@ import { useDebounced } from '@/lib/use-debounced';
 import { docKeys, docsApi, docTab, useDocType, type DocListFilters, type ListView } from './api';
 import { lineColumns } from './form-model';
 import { SavedViewsMenu, useSavedViews, type SavedConfig } from './saved-views';
+import { dec } from './decimal';
 import { DocStatusBadge, PendingPill, QtyCell } from './status';
 import { docExtension, docListActions } from './extensions';
 import './extensions-installed';
@@ -151,7 +152,12 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
         ) }),
       col({ id: 'doc_date', label: t('docs.col.date'), header: () => sortHeader('doc_date', t('docs.col.date')), width: 120, cell: ({ row }) => fmtDate(row.original.docDate) }),
       col({ id: 'location', label: t('docs.col.location'), header: t('docs.col.location'), width: 160, cell: ({ row }) => row.original.location?.name ?? '—' }),
-      col({ id: 'status', label: t('docs.col.status'), header: () => sortHeader('status', t('docs.col.status')), width: 230, cell: ({ row }) => <DocStatusBadge statusKey={row.original.statusKey} label={row.original.statusLabel} docType={docType} /> }),
+      col({ id: 'status', label: t('docs.col.status'), header: () => sortHeader('status', t('docs.col.status')), width: 230, cell: ({ row }) => {
+        const r = row.original as DocListRow;
+        // Approved more than was asked for (approver increased the qty): flag it in the status.
+        const excess = r.statusKey === 'approved' && dec.cmp(r.qty.approved, r.requestedQty) > 0;
+        return <DocStatusBadge statusKey={r.statusKey} label={excess ? t('docs.status.approvedExcess') : r.statusLabel} docType={docType} />;
+      } }),
       col({ id: 'total_amount', label: t('docs.col.total'), header: () => sortHeader('total_amount', t('docs.col.total'), 'right'), width: 140, align: 'right',
         cell: ({ row }) => row.original.totalAmount ? formatDecimal(row.original.totalAmount, 2, { currency }) : '—' }),
       col({ id: 'line_count', label: t('docs.col.lines'), header: t('docs.col.lines'), width: 80, align: 'right', cell: ({ row }) => row.original.lineCount }),

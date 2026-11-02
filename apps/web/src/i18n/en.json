@@ -1485,6 +1485,7 @@
   "docs.col.uom": "Unit",
   "docs.col.requiredDate": "Required by",
   "docs.col.where": "Waiting at",
+  "docs.status.approvedExcess": "Approved (excess)",
   "docs.qty.requested": "Requested",
   "docs.qty.approved": "Approved",
   "docs.qty.held": "Held",
