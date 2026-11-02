@@ -597,7 +597,7 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected
   const [histOpen, setHistOpen] = useState(false);
   const lineHistory = useMemo(() => {
     const hist = (line as unknown as { history?: TimelineEntry[] }).history ?? [];
-    return hist.filter(e => e.kind === 'workflow' || e.kind === 'decision');
+    return hist.filter(e => e.kind === 'workflow');
   }, [line]);
 
   const qtyInput = (b: Bucket) => {
