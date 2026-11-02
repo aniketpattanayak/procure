@@ -6,7 +6,7 @@ import type { Tx } from '../../../core/db.service';
 import { AppError } from '../../../core/errors';
 import { dateStr, docAction, DocActor, DocStore, DocumentsService, fromUnits, toUnits } from '../../documents';
 import { decodeCursor, getTenantSetting, likePattern, toPage } from '../../identity';
-import { scopeCondition } from '../../permissions';
+import { departmentCondition, scopeCondition } from '../../permissions';
 import { INDENT, SELECTION } from '../installer/a-steps';
 import { orderableUnits } from './po-ledger';
 import { PO } from './po.type';
@@ -46,6 +46,8 @@ export class PoLinesService {
     if (!f.ids) conds.push(sql<SqlBool>`(coalesce(s.approved, 0) + coalesce(s.over_approved, 0) - coalesce(s.ordered, 0) - coalesce(s.short_closed, 0)) > 0`);
     if (f.ids) conds.push(sql<SqlBool>`l.id = any(${sql.val(f.ids)}::uuid[])`);
     if (applyScope) conds.push(scopeCondition(sql.ref('n.path'), this.store.scopeFilter(actor, PO)));
+    // Department-wise access follows the indent's department (the indent header is `ind` when selection is on).
+    if (applyScope) conds.push(departmentCondition(actor.perms, INDENT, actor.userId, selectionOn ? 'ind.custom' : 'd.custom', selectionOn ? 'ind.created_by' : 'd.created_by'));
     if (f.item) conds.push(sql<SqlBool>`l.item_id = ${f.item}`);
     if (f.vendor) conds.push(selectionOn ? sql<SqlBool>`l.custom->>'vendor' = ${f.vendor}` : sql<SqlBool>`false`);
     if (f.location) conds.push(sql<SqlBool>`n.path <@ (select path from app.location_node where tenant_id = ${actor.tenantId} and id = ${f.location})`);

@@ -9,7 +9,7 @@ import type { LedgerEvent } from '../../../core/ports';
 import {
   type DocActor, DocStore, DocumentHooks, DocumentsService, fromUnits, type LineOutcomeCtx, type SubmitHookCtx, toUnits,
 } from '../../documents';
-import { scopeCondition } from '../../permissions';
+import { departmentCondition, scopeCondition } from '../../permissions';
 import { decodeCursor, getTenantSetting, likePattern, toPage } from '../../identity';
 import { dateOnly, IndentLine, IndentLines, isOpen, qtyExceeds, selectable } from '../indent/indent-lines';
 import { INDENT, SELECTION } from '../installer/a-steps';
@@ -59,7 +59,8 @@ export class SelectionService implements OnModuleInit {
       .where('l.tenant_id', '=', actor.tenantId).where('t.key', '=', INDENT).where('l.is_deleted', '=', false).where('d.is_deleted', '=', false)
       .where('d.closed_at', 'is', null).where('d.cancelled_at', 'is', null).where('l.status_key', 'not in', ['closed', 'cancelled', 'rejected', 'draft', 'submitted'])
       .where(sql<boolean>`(s.approved + s.over_approved - s.selected - s.short_closed) > 0`)
-      .where(scopeCondition(sql`n.path`, this.store.scopeFilter(actor, SELECTION)));
+      .where(scopeCondition(sql`n.path`, this.store.scopeFilter(actor, SELECTION)))
+      .where(departmentCondition(actor.perms, INDENT, actor.userId));
     if (q.item) qb = qb.where('l.item_id', '=', q.item);
     if (q.location) qb = qb.where(sql<boolean>`n.path <@ (select p.path from app.location_node p where p.id = ${q.location})`);
     if (q.q) {

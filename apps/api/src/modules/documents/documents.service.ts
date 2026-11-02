@@ -1,3 +1,4 @@
+import { departmentAllows } from '../permissions';
 import { Injectable } from '@nestjs/common';
 import {
   CancelInput, CloseInput, DataField, DocumentLineRow, DocumentRow, DocumentUpdate, DocumentWrite, ErrorCode, FormDefinition, MyPermissions,
@@ -58,7 +59,8 @@ export class DocumentsService {
     const doc = await this.store.loadDoc(tx, actor.tenantId, id, { lock, typeId: type.id });
     const isCreator = !!actor.userId && doc.created_by === actor.userId;
     const statusView = isCreator || doc.status_key === 'submitted' || has(actor, docView(type.key, doc.status_key));
-    if (!this.store.inScope(actor, type.key, doc.loc_path) || !statusView) throw AppError.notFound('Document');
+    const deptOk = departmentAllows(actor.perms, type.key, (doc.custom as Record<string, unknown> | null)?.department, doc.created_by, actor.userId);
+    if (!this.store.inScope(actor, type.key, doc.loc_path) || !statusView || !deptOk) throw AppError.notFound('Document');
     return doc;
   }
 

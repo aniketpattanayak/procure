@@ -4,6 +4,7 @@ export { PermissionRegistryService, SCOPED_TABS, fieldsOf, isScopedTab } from '.
 export { PermissionCache } from './cache';
 export { PermissionResolverService } from './resolver.service';
 export { ScopeService, scopeCondition } from './scope.service';
+export { DEPT_SCOPED_TYPES, departmentAllows, departmentCondition, departmentsOf, readDepartmentMap, USER_DEPARTMENTS_KEY } from './departments';
 export type { NodeFilter } from './scope.service';
 export { compile, computeVisibility, expandScope, mergeFieldAccess } from './compiler';
 export type { RegistryEntry, RegistrySource, ResolvedPermissions, ScopeSet } from './compiler';

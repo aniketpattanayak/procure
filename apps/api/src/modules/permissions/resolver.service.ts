@@ -3,6 +3,7 @@ import { DbService, Tx } from '../../core/db.service';
 import type { PermissionResolver } from '../../core/auth/permissions';
 import { PermissionCache } from './cache';
 import { compile, CompileInput, FieldAccessRow, Grant, ResolvedPermissions, ScopeNode, ScopeRow } from './compiler';
+import { userDepartments } from './departments';
 import { PermissionRegistryService } from './registry.service';
 
 /**
@@ -22,7 +23,12 @@ export class PermissionResolverService implements PermissionResolver {
     const version = this.cache.version(tenantId);
     const hit = this.cache.get(tenantId, userId, version);
     if (hit && hit.isTenantAdmin === isTenantAdmin) return hit;
-    const { perms } = await this.db.tenantTx(tenantId, async tx => compile(await this.inputs(tx, tenantId, userId, isTenantAdmin, version)));
+    const { perms } = await this.db.tenantTx(tenantId, async tx => {
+      const c = compile(await this.inputs(tx, tenantId, userId, isTenantAdmin, version));
+      // Department-wise access (per user); tenant admins always see every department.
+      c.perms.departments = isTenantAdmin ? null : await userDepartments(tx, userId);
+      return c;
+    });
     this.cache.set(tenantId, userId, version, perms);
     return perms;
   }

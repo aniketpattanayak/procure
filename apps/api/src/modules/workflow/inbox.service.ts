@@ -3,7 +3,7 @@ import type { InboxCounts, InboxItem, MyPermissions } from '@procure/schema';
 import { RawBuilder, sql } from 'kysely';
 import type { Tx } from '../../core/db.service';
 import { decodeCursor, getTenantSetting, toPage } from '../identity';
-import { ScopeService, scopeCondition } from '../permissions';
+import { ScopeService, scopeCondition, departmentCondition } from '../permissions';
 import { ActorsService } from './actors.service';
 import { Def, docTab, FIXED_STATUS_LABELS, parseDefinition, statusLabelOf } from './model';
 
@@ -51,7 +51,7 @@ export class InboxService {
         const def = parseDefinition(v.definition);
         defs.set(v.id, def);
         const stages = held.get(v.key)!;
-        const scope = scopeCondition(sql.ref('loc.path'), this.scope.nodeFilter(perms, docTab(v.key)));
+        const scope = sql<boolean>`(${scopeCondition(sql.ref('loc.path'), this.scope.nodeFilter(perms, docTab(v.key)))} and ${departmentCondition(perms, v.key, null)})`;
         for (const s of def.stages) {
           if (!stages.has(s.key)) continue;
           const actor = this.actorSql(s.actors, userId, roleIds);

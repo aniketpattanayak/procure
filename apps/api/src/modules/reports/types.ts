@@ -71,7 +71,7 @@ export interface ResolvedSource {
   /** Base conditions (tenant, not deleted, status views …). */
   where: Expression<SqlBool>[];
   /** Data scope: location path column + the tab whose scope applies. */
-  scope?: { tabKey: string; path: RawBuilder<unknown> };
+  scope?: { tabKey: string; path: RawBuilder<unknown>; /** Department-wise access: document type key (header `department` on alias d). */ docType?: string };
   /** Unique row id (detail rows; keyset tiebreak). */
   rowId: RawBuilder<unknown>;
   fields: SourceField[];

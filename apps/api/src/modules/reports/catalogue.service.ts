@@ -266,7 +266,7 @@ export class ReportsCatalogue implements OnModuleInit {
     fields.push(...formFields(b.header, { idPrefix: 'custom.', json: sql`${doc}.custom`, formKey: H, path: ['Header'], skip: b.headerSys, tenantId, timezone: tz }));
     const link = sql`'/docs/' || ${t.key}::text || '/' || ${doc}.id::text`;
     const base = {
-      dateField: 'doc_date', link, scope: { tabKey: `doc.${t.key}`, path: sql`loc.path` },
+      dateField: 'doc_date', link, scope: { tabKey: `doc.${t.key}`, path: sql`loc.path`, docType: t.key },
       viewKey: `doc.${t.key}:action.view`, defaultSort: [{ field: 'doc_date', dir: 'desc' as const }, { field: 'number', dir: 'desc' as const }],
     };
     if (kind === 'doc') {

@@ -3,7 +3,7 @@ import type { MyPermissions } from '@procure/schema';
 import { Expression, RawBuilder, sql, SqlBool } from 'kysely';
 import type { Tx } from '../../core/db.service';
 import { AppError } from '../../core/errors';
-import { NodeFilter, scopeCondition } from '../permissions';
+import { NodeFilter, scopeCondition, departmentCondition } from '../permissions';
 import { capabilities } from './fields';
 import { DatePreset, DateRange, isDateStr, presetRange } from './presets';
 import type { FieldType, ResolvedSource, SourceField } from './types';
@@ -302,6 +302,8 @@ export function compile(src: ResolvedSource, def: Def, ctx: CompileContext, opts
   // filters
   const where: Expression<SqlBool>[] = [...src.where];
   if (src.scope && ctx.perms) where.push(scopeCondition(src.scope.path, ctx.nodeFilter(ctx.perms, src.scope.tabKey)));
+  // Department-wise access (indents): reports show only the user's departments (no creator exception here).
+  if (src.scope?.docType && ctx.perms) where.push(departmentCondition(ctx.perms, src.scope.docType, null));
   def.filters.forEach((flt, i) => {
     const path = `definition.filters.${i}`;
     const f = field(flt.field, `${path}.field`);

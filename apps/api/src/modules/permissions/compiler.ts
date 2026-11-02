@@ -51,6 +51,8 @@ export interface ScopeSet {
 export interface ResolvedPermissions extends MyPermissions {
   isTenantAdmin: boolean;
   scopes: Record<string, ScopeSet>;
+  /** Department-wise access: allowed department ids, or null/absent = all (see departments.ts). */
+  departments?: string[] | null;
 }
 
 export interface CompileInput {

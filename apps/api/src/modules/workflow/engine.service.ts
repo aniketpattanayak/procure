@@ -379,7 +379,7 @@ export class EngineService {
       throw e;
     }
     if (snap.docTypeKey !== docTypeKey) throw AppError.notFound('Document');
-    if (!this.actors.inScope(caller.perms, { docTypeKey, locationPath: snap.locationPath })) {
+    if (!this.actors.inScope(caller.perms, { docTypeKey, locationPath: snap.locationPath, values: snap.values })) {
       // An explicit assignment (forward / escalation) is a grant for this document even outside the caller's scope.
       const asg = await tx.selectFrom('app.wf_assignment as a').innerJoin('app.wf_instance as i', 'i.id', 'a.instance_id')
         .select('a.id').where('i.document_id', '=', documentId).where('i.status', '=', 'running')

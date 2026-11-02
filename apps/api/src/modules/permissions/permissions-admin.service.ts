@@ -11,6 +11,7 @@ import { AppError } from '../../core/errors';
 import { tenantPrincipal } from '../../core/request-context';
 import { toIso } from '../identity';
 import { PermissionCache } from './cache';
+import { readDepartmentMap, USER_DEPARTMENTS_KEY } from './departments';
 import type { RegistryEntry, ResolvedPermissions, Visibility } from './compiler';
 import { isScopedTab, PermissionRegistryService } from './registry.service';
 import { PermissionResolverService } from './resolver.service';
@@ -182,6 +183,41 @@ export class PermissionsAdminService {
         before: before.map(stripId), after: after.map(stripId),
       });
       return this.setView(tx, subject);
+    });
+    await this.cache.bump(p.tenantId);
+    return view;
+  }
+
+  // ------------------------------------------------------------------ user departments (department-wise access)
+
+  /** { all: true } or { all: false, departmentIds } for one user. */
+  async getUserDepartments(userId: string): Promise<{ all: boolean; departmentIds: string[] }> {
+    const p = tenantPrincipal();
+    return this.db.tenantTx(p.tenantId, async tx => {
+      await this.userRow(tx, userId);
+      const m = await readDepartmentMap(tx);
+      return Object.prototype.hasOwnProperty.call(m, userId) ? { all: false, departmentIds: m[userId]! } : { all: true, departmentIds: [] };
+    });
+  }
+
+  async putUserDepartments(userId: string, body: { all: boolean; departmentIds: string[] }): Promise<{ all: boolean; departmentIds: string[] }> {
+    const p = tenantPrincipal();
+    const view = await this.db.tenantTx(p.tenantId, async tx => {
+      await this.userRow(tx, userId);
+      const ids = [...new Set(body.departmentIds)];
+      if (!body.all && ids.length) {
+        // Only records of the Department master are allowed.
+        const ok = await tx.selectFrom('app.master_record as r').innerJoin('app.master_def as m', 'm.id', 'r.master_id')
+          .select('r.id').where('m.key', '=', 'department').where('r.id', 'in', ids).execute();
+        if (ok.length !== ids.length) throw new AppError(400, 'VALIDATION_FAILED', 'Choose departments from the Department list.', undefined, [{ path: 'departmentIds', message: 'Unknown department.' }]);
+      }
+      const m = await readDepartmentMap(tx);
+      const before = Object.prototype.hasOwnProperty.call(m, userId) ? m[userId]! : 'all';
+      if (body.all) delete m[userId]; else m[userId] = ids;
+      await tx.insertInto('app.tenant_setting').values({ tenant_id: p.tenantId, key: USER_DEPARTMENTS_KEY, value: JSON.stringify(m), updated_by: p.userId })
+        .onConflict(oc => oc.columns(['tenant_id', 'key']).doUpdateSet({ value: JSON.stringify(m), updated_by: p.userId, updated_at: new Date() })).execute();
+      await this.audit.tenant(tx, { action: 'update', entity: 'user_departments', entityId: userId, before: { departments: before }, after: { departments: body.all ? 'all' : ids } });
+      return body.all ? { all: true, departmentIds: [] } : { all: false, departmentIds: ids };
     });
     await this.cache.bump(p.tenantId);
     return view;

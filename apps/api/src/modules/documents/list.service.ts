@@ -6,7 +6,7 @@ import type { Tx } from '../../core/db.service';
 import { AppError } from '../../core/errors';
 import { getTenantSetting } from '../identity';
 import { canonicalDecimal, isGrid, RecordEngine } from '../forms';
-import { scopeCondition } from '../permissions';
+import { departmentCondition, scopeCondition } from '../permissions';
 import { bucketsFromRow, qty, toQuantityBuckets } from './qty';
 import { stageOfStatus, statusLabel } from './status';
 import { dateStr, DocStore, FormBundle, numForField } from './store';
@@ -120,7 +120,9 @@ export class DocListService {
   /** Conditions shared by both views and the counts (alias d = document, loc = its location). */
   private conditions(actor: DocActor, b: FormBundle, q: ListInput, itemView: boolean): Expression<SqlBool>[] {
     const tid = actor.tenantId;
-    const conds: Expression<SqlBool>[] = [scopeCondition('loc.path', this.store.scopeFilter(actor, b.type.key))];
+    const conds: Expression<SqlBool>[] = [scopeCondition('loc.path', this.store.scopeFilter(actor, b.type.key)),
+      // Department-wise access (indents): own departments or created by the caller.
+      departmentCondition(actor.perms, b.type.key, actor.userId)];
     if (q.location) conds.push(sql<SqlBool>`loc.path <@ (select n.path from app.location_node n where n.tenant_id = ${tid} and n.id = ${q.location})`);
     if (q.from) conds.push(sql<SqlBool>`d.doc_date >= ${q.from}::date`);
     if (q.to) conds.push(sql<SqlBool>`d.doc_date <= ${q.to}::date`);

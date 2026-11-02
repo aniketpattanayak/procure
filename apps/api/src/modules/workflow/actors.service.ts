@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { MyPermissions, WorkflowActor } from '@procure/schema';
 import { RawBuilder, sql } from 'kysely';
 import type { Tx } from '../../core/db.service';
-import { PermissionRegistryService, ScopeService } from '../permissions';
+import { PermissionRegistryService, ScopeService, departmentAllows } from '../permissions';
 import { docTab, stageKeyPerm, StageDef } from './model';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -77,7 +77,9 @@ export class ActorsService {
     return { ok: true };
   }
 
-  inScope(perms: MyPermissions | undefined, doc: Pick<ActorDoc, 'docTypeKey' | 'locationPath'>): boolean {
+  inScope(perms: MyPermissions | undefined, doc: Pick<ActorDoc, 'docTypeKey' | 'locationPath'> & { values?: Record<string, unknown> }): boolean {
+    // Department-wise access applies to approvers too (no creator exception: submitters don't approve their own).
+    if (!departmentAllows(perms, doc.docTypeKey, doc.values?.department, null, null)) return false;
     return this.scope.contains(this.scope.nodeFilter(perms, docTab(doc.docTypeKey)), doc.locationPath);
   }
 

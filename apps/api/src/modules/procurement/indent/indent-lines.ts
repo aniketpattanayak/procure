@@ -1,3 +1,4 @@
+import { departmentAllows } from '../../permissions';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 import type { Tx } from '../../../core/db.service';
@@ -43,7 +44,8 @@ export class IndentLines {
       .innerJoin('app.doc_type as t', 't.id', 'd.doc_type_id')
       .innerJoin('app.location_node as n', 'n.id', 'd.location_node_id')
       .select(['l.id', 'l.document_id', 'd.number', 'l.line_no', 'l.item_id', 'l.uom_id', 'l.qty', 'l.required_date', 'l.status_key', 'd.location_node_id',
-        'n.name as loc_name', sql<string>`n.path::text`.as('loc_path'), 'd.closed_at', 'd.cancelled_at', 'd.status_key as doc_status'])
+        'n.name as loc_name', sql<string>`n.path::text`.as('loc_path'), 'd.closed_at', 'd.cancelled_at', 'd.status_key as doc_status',
+        sql<string | null>`d.custom->>'department'`.as('dept'), 'd.created_by as doc_created_by'])
       .where('l.tenant_id', '=', actor.tenantId).where('l.id', 'in', uniq).where('l.is_deleted', '=', false).where('d.is_deleted', '=', false)
       .where('t.key', '=', INDENT).execute();
     if (opts.lockSummaries) {
@@ -55,6 +57,7 @@ export class IndentLines {
     const sums = new Map((await q.execute()).map(s => [s.line_id, s as unknown as Record<string, string>]));
     for (const r of rows) {
       if (opts.scopeCheck !== false && !this.store.inScope(actor, opts.scopeType ?? INDENT, r.loc_path)) continue;
+      if (opts.scopeCheck !== false && !departmentAllows(actor.perms, opts.scopeType ?? INDENT, r.dept, r.doc_created_by, actor.userId)) continue;
       const s = sums.get(r.id);
       const buckets = Object.fromEntries(QTY_BUCKETS.map(k => [k, toUnits(s?.[k] ?? '0')])) as LineBuckets;
       out.set(r.id, {

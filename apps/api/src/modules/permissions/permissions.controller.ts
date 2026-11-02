@@ -16,6 +16,7 @@ const USERS_MANAGE = 'admin.users:action.manage_permissions';
 
 const RoleUpdate = RoleInput.extend({ version: z.number().int() });
 const UserRoles = z.object({ roleIds: z.array(Uuid).max(100) });
+const UserDepartments = z.object({ all: z.boolean(), departmentIds: z.array(Uuid).max(200).default([]) });
 
 /** Tab keys in the URL must at least look like a registry tab key. */
 function tabKeyOf(v: string): string {
@@ -97,6 +98,18 @@ export class PermissionsController {
   @Requires(USERS_MANAGE)
   putUserScope(@Param('id', UserId) id: string, @Body(new Zod(ScopeReplace)) body: z.infer<typeof ScopeReplace>, @CurrentPermissions() perms?: MyPermissions) {
     return this.svc.putScope({ userId: id }, body, resolved(perms));
+  }
+
+  @Get('users/:id/departments')
+  @Requires(USERS_MANAGE)
+  getUserDepartments(@Param('id', UserId) id: string) {
+    return this.svc.getUserDepartments(id);
+  }
+
+  @Put('users/:id/departments')
+  @Requires(USERS_MANAGE)
+  putUserDepartments(@Param('id', UserId) id: string, @Body(new Zod(UserDepartments)) body: z.infer<typeof UserDepartments>) {
+    return this.svc.putUserDepartments(id, body);
   }
 
   @Put('users/:id/roles')
