@@ -79,17 +79,17 @@ export const GRN_SPEC: SystemTypeSpec = {
       {
         // HOD reviews after store verification — rejection puts entire GRN on hold; stock remains posted but blocked
         key: 'hod_approval', name: 'HOD Approval', actions: ['approve', 'reject'],
-        effects: { onReject: [{ effect: 'block_stock' }, { effect: 'set_status', status: 'on_hold' }] },
+        effects: { onReject: [{ effect: 'block_stock' }] },
       },
       {
         // Second sequential approver after HOD — role to be assigned by tenant admin
         key: 'approver2', name: 'Approver 2', actions: ['approve', 'reject'],
-        effects: { onReject: [{ effect: 'block_stock' }, { effect: 'set_status', status: 'on_hold' }] },
+        effects: { onReject: [{ effect: 'block_stock' }] },
       },
       {
         // Third sequential approver — role to be assigned by tenant admin
         key: 'approver3', name: 'Approver 3', actions: ['approve', 'reject'],
-        effects: { onReject: [{ effect: 'block_stock' }, { effect: 'set_status', status: 'on_hold' }] },
+        effects: { onReject: [{ effect: 'block_stock' }] },
       },
       {
         key: 'quality', name: 'Quality check', when: QC_CONDITION, actions: ['approve', 'partial', 'reject', 'hold'],

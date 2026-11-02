@@ -75,7 +75,9 @@ export class PdfRenderer implements OnApplicationShutdown {
     if (!this.launching) {
       this.launching = (async () => {
         const { chromium } = await import('playwright-core');
-        const sparticuz = await import('@sparticuz/chromium').then(m => m.default).catch(() => null);
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore — @sparticuz/chromium is optional; not installed locally but may be present at runtime
+        const sparticuz = await import('@sparticuz/chromium').then((m: { default: { executablePath: () => Promise<string>; args: string[] } }) => m.default).catch(() => null);
         const executablePath = chromiumPath() ?? (sparticuz ? await sparticuz.executablePath() : undefined);
         const sparticuzArgs = sparticuz?.args ?? [];
         const b = await chromium.launch({
