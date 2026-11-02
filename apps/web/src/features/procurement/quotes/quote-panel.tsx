@@ -84,6 +84,18 @@ export function QuotePanel({ doc, focusLineId, onFocusLine }: { doc: DocumentRow
   );
 }
 
+/** One item's vendor log (Indents list accordion): the same quote log / comparison as the Vendor quotes tab. */
+export function LineVendorLog({ doc, line }: { doc: DocumentRow; line: DocumentLineRow }) {
+  const p = usePermissions();
+  const flow = useProcurementFlow();
+  const [view, setView] = useState<View>('log');
+  return (
+    <LineQuotes doc={doc} line={line} view={view} setView={setView} canCompare={p.has(PERM.compare)}
+      canLog={p.has(PERM.logQuote)} canSelect={flow.selectionEnabled && p.has(PERM.selectionAdd)}
+      canApproveQuote={flow.selectionEnabled && p.has(PERM.approveQuote)} />
+  );
+}
+
 function LineQuotes({ doc, line, view, setView, canCompare, canLog, canSelect, canApproveQuote }: {
   doc: DocumentRow; line: DocumentLineRow; view: View; setView: (v: View) => void; canCompare: boolean; canLog: boolean; canSelect: boolean; canApproveQuote: boolean;
 }) {
@@ -194,7 +206,7 @@ function groupByVendor(rows: VendorQuoteRow[]) {
 }
 
 /** One vendor: the current quote, plus earlier versions (append-only history) when loaded. */
-function VendorQuoteCard({ rows, qty, uom, canEdit, onEdit, canApprove, pendingQty, lineUom, onApproved }: { rows: VendorQuoteRow[]; qty: number; uom: string; canEdit: boolean; onEdit: (r: VendorQuoteRow) => void; canApprove: boolean; pendingQty: string; lineUom: string; onApproved: () => void }) {
+function VendorQuoteCard({ rows, qty, uom, canEdit, onEdit, canApprove, pendingQty, lineUom: _lineUom, onApproved }: { rows: VendorQuoteRow[]; qty: number; uom: string; canEdit: boolean; onEdit: (r: VendorQuoteRow) => void; canApprove: boolean; pendingQty: string; lineUom: string; onApproved: () => void }) {
   const [open, setOpen] = useState(false);
   const approveMut = useMutation({
     mutationFn: (quoteId: string) => procApi.approveQuote(quoteId, pendingQty),

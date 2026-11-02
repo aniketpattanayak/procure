@@ -47,6 +47,8 @@ export interface DataTableProps<T> {
   queryKey: string;
   getRowId: (row: T) => string;
   onRowClick?: (row: T) => void;
+  /** Accordion content shown under a row (return null when the row is closed). Rows then size to their content. */
+  renderExpanded?: (row: T) => ReactNode | null;
   rowHeight?: number;
   /** Max visible height of the scroll area; rows virtualise inside it. */
   height?: string;
@@ -74,7 +76,7 @@ function readVisibility(key: string | undefined): VisibilityState | null {
  * pages load automatically as you scroll near the end and via an explicit "Load more" button.
  */
 export function DataTable<T>({
-  columns, fetchPage, queryKey, getRowId, onRowClick, rowHeight = 48, height = 'calc(100dvh - 15rem)', empty, toolbar, storageKey, labels: labelsIn, className, ...rest
+  columns, fetchPage, queryKey, getRowId, onRowClick, renderExpanded, rowHeight = 48, height = 'calc(100dvh - 15rem)', empty, toolbar, storageKey, labels: labelsIn, className, ...rest
 }: DataTableProps<T>) {
   const labels = { ...defaultLabels, ...labelsIn };
   const [rows, setRows] = useState<T[]>([]);
@@ -218,23 +220,32 @@ export function DataTable<T>({
               {vItems.map(vi => {
                 const row = tableRows[vi.index]!;
                 const clickable = !!onRowClick;
+                const expanded = renderExpanded ? renderExpanded(row.original) : null;
                 return (
-                  <div
-                    role="row"
-                    key={row.id}
-                    data-index={vi.index}
-                    aria-rowindex={vi.index + 2}
-                    tabIndex={clickable ? 0 : undefined}
-                    onClick={clickable ? () => onRowClick(row.original) : undefined}
-                    onKeyDown={clickable ? e => { if (e.key === 'Enter' && e.target === e.currentTarget) onRowClick(row.original); } : undefined}
-                    className={cn('absolute inset-x-0 grid items-center border-b border-border', clickable && 'cursor-pointer hover:bg-subtle focus-visible:bg-accent-soft focus-visible:outline-none')}
-                    style={{ gridTemplateColumns: template, height: rowHeight, transform: `translateY(${vi.start}px)` }}
-                  >
-                    {row.getVisibleCells().map(cell => (
-                      <div role="cell" key={cell.id} className={cn('min-w-0 truncate px-3', (cell.column.columnDef as DataTableColumn<T>).align === 'right' && 'text-right tabular')}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  // The wrapper is measured, so a row with an open accordion takes the room it needs.
+                  <div key={row.id} data-index={vi.index} ref={renderExpanded ? virtualizer.measureElement : undefined}
+                    className="absolute inset-x-0" style={{ transform: `translateY(${vi.start}px)` }}>
+                    <div
+                      role="row"
+                      aria-rowindex={vi.index + 2}
+                      aria-expanded={renderExpanded ? !!expanded : undefined}
+                      tabIndex={clickable ? 0 : undefined}
+                      onClick={clickable ? () => onRowClick(row.original) : undefined}
+                      onKeyDown={clickable ? e => { if (e.key === 'Enter' && e.target === e.currentTarget) onRowClick(row.original); } : undefined}
+                      className={cn('grid items-center border-b border-border', clickable && 'cursor-pointer hover:bg-subtle focus-visible:bg-accent-soft focus-visible:outline-none', expanded && 'bg-accent-soft/40')}
+                      style={{ gridTemplateColumns: template, height: rowHeight }}
+                    >
+                      {row.getVisibleCells().map(cell => (
+                        <div role="cell" key={cell.id} className={cn('min-w-0 truncate px-3', (cell.column.columnDef as DataTableColumn<T>).align === 'right' && 'text-right tabular')}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </div>
+                      ))}
+                    </div>
+                    {expanded && (
+                      <div role="row" className="border-b border-border bg-subtle/60">
+                        <div role="cell" className="px-3 py-3">{expanded}</div>
                       </div>
-                    ))}
+                    )}
                   </div>
                 );
               })}

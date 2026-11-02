@@ -4,7 +4,7 @@ import {
   Button, cn, DataTable, EmptyState, Input, NativeSelect, Segmented, Skeleton, type DataTableColumn,
 } from '@procure/ui';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, ArrowUpDown, Clock, FileStack, FileX2, Lock, Plus, Search, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Clock, FileStack, FileX2, Lock, Plus, Search, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -24,6 +24,7 @@ import { usePermissions } from '@/lib/permissions';
 import { useTenantPrincipal } from '@/lib/session';
 import { useDebounced } from '@/lib/use-debounced';
 import { docKeys, docsApi, docTab, useDocType, type DocListFilters, type ListView } from './api';
+import { IndentAccordion, ItemVendorLog } from '@/features/procurement/indent-accordion';
 import { lineColumns } from './form-model';
 import { SavedViewsMenu, useSavedViews, type SavedConfig } from './saved-views';
 import { dec } from './decimal';
@@ -139,12 +140,24 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
     return cur === c.id ? { ...c, ariaSort: 'ascending' } : cur === `-${c.id}` ? { ...c, ariaSort: 'descending' } : c;
   }), [filters.sort]);
 
+  // Indents: rows open as an accordion (items, then each item's vendor log); several can be open at once.
+  const accordion = type === 'indent';
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpanded = useCallback((id: string) => setExpanded(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; }), []);
+
   const docColumns = useMemo<DataTableColumn<DocListRow>[]>(() => {
     const show = new Set([...docType.settings.documentColumns, 'qty_requested', 'qty_approved', 'qty_held', 'qty_rejected', 'qty_pending']);
     const col = (c: DataTableColumn<DocListRow>): DataTableColumn<DocListRow> => ({ ...c, defaultHidden: !show.has(c.id) && !c.alwaysVisible });
     const cols: DataTableColumn<DocListRow>[] = [
       col({ id: 'number', label: docType.settings.numberLabel || t('docs.col.number'), header: () => sortHeader('number', docType.settings.numberLabel || t('docs.col.number')), width: 190, alwaysVisible: true,
-        cell: ({ row: { original: r } }) => (
+        cell: ({ row: { original: r } }) => accordion ? (
+          // Indents: the number opens the accordion (the row click does the same); "View" inside opens the page.
+          <span className="inline-flex items-center gap-1.5 font-medium text-fg" data-testid={`doc-row-${r.number ?? r.id}`}>
+            {expanded.has(r.id) ? <ChevronDown className="size-4 text-accent" aria-hidden /> : <ChevronRight className="size-4 text-fg-subtle" aria-hidden />}
+            {r.number ?? <span className="font-normal italic text-fg-subtle">{t('docs.draft')}</span>}
+            {r.overdue && <Clock className="size-3.5 text-danger" aria-label={t('docs.overdue')} />}
+          </span>
+        ) : (
           <Link href={`/docs/${type}/${r.id}`} onClick={e => e.stopPropagation()} className="inline-flex items-center gap-1.5 font-medium text-fg hover:text-accent hover:underline" data-testid={`doc-row-${r.number ?? r.id}`}>
             {r.number ?? <span className="font-normal italic text-fg-subtle">{t('docs.draft')}</span>}
             {r.overdue && <Clock className="size-3.5 text-danger" aria-label={t('docs.overdue')} />}
@@ -175,7 +188,7 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
       cols.push(col({ id: f.key, label: f.label, header: f.label, width: NUMERIC.has(f.type) ? 130 : 180, align: NUMERIC.has(f.type) ? 'right' : undefined, cell: ({ row }) => cellText(f, row.original.columns?.[f.key], currency) }));
     }
     return withSort(cols);
-  }, [docType, headerCustom, currency, sortHeader, withSort, type]);
+  }, [docType, headerCustom, currency, sortHeader, withSort, type, accordion, expanded]);
 
   const itemColumns = useMemo<DataTableColumn<ItemListRow>[]>(() => {
     // The quantity buckets are what the item-wise view is for: requested/approved/held/rejected show by default.
@@ -185,7 +198,12 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
       col({ id, label, header: label, width: 96, align: 'right', cell: ({ row }) => <QtyCell value={row.original.qty[bucket]} tone={tone} testId={`qty-${bucket}-${row.original.number ?? row.original.documentId}-${row.original.lineNo}`} /> });
     const cols: DataTableColumn<ItemListRow>[] = [
       col({ id: 'number', label: docType.settings.numberLabel || t('docs.col.number'), header: () => sortHeader('number', docType.settings.numberLabel || t('docs.col.number')), width: 200, alwaysVisible: true,
-        cell: ({ row: { original: r } }) => (
+        cell: ({ row: { original: r } }) => accordion ? (
+          <span className="inline-flex items-center gap-1.5 font-medium" data-testid={`doc-row-${r.number ?? r.documentId}-${r.lineNo}`}>
+            {expanded.has(r.lineId) ? <ChevronDown className="size-4 text-accent" aria-hidden /> : <ChevronRight className="size-4 text-fg-subtle" aria-hidden />}
+            {r.number ?? <span className="font-normal italic text-fg-subtle">{t('docs.draft')}</span>}
+          </span>
+        ) : (
           <Link href={`/docs/${type}/${r.documentId}#line-${r.lineNo}`} onClick={e => e.stopPropagation()} className="font-medium hover:text-accent hover:underline" data-testid={`doc-row-${r.number ?? r.documentId}-${r.lineNo}`}>
             {r.number ?? <span className="font-normal italic text-fg-subtle">{t('docs.draft')}</span>}
           </Link>
@@ -212,7 +230,7 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
       cols.push(col({ id: c.key, label: c.label, header: c.label, width: NUMERIC.has(c.type) ? 120 : 170, align: NUMERIC.has(c.type) ? 'right' : undefined, cell: ({ row }) => cellText(c, row.original.columns?.[c.key], currency) }));
     }
     return withSort(cols);
-  }, [docType, lineCustom, currency, sortHeader, withSort, type]);
+  }, [docType, lineCustom, currency, sortHeader, withSort, type, accordion, expanded]);
 
   // Saved-view columns are written as { __saved: [...] }; translate to a visibility map before the table mounts.
   const allIds = (filters.view === 'item' ? itemColumns : docColumns).map(c => c.id);
@@ -296,7 +314,11 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
         fetchPage={fetchPage}
         queryKey={queryKey}
         getRowId={r => ('lineId' in r ? r.lineId : r.id)}
-        onRowClick={r => router.push('lineId' in r ? `/docs/${type}/${r.documentId}#line-${r.lineNo}` : `/docs/${type}/${r.id}`)}
+        onRowClick={r => (accordion ? toggleExpanded('lineId' in r ? r.lineId : r.id)
+          : router.push('lineId' in r ? `/docs/${type}/${r.documentId}#line-${r.lineNo}` : `/docs/${type}/${r.id}`))}
+        renderExpanded={accordion ? r => ('lineId' in r
+          ? (expanded.has(r.lineId) ? <ItemVendorLog type={type} docId={r.documentId} lineId={r.lineId} /> : null)
+          : (expanded.has(r.id) ? <IndentAccordion type={type} docId={r.id} /> : null)) : undefined}
         storageKey={storageKey}
         rowHeight={filters.view === 'item' ? 44 : 48}
         labels={labels}
