@@ -1,10 +1,10 @@
 'use client';
-import type { DocTypeSummary, DocumentLineRow, DocumentRow, WorkflowActionInput } from '@procure/schema';
+import type { DocListRow, DocTypeSummary, DocumentLineRow, DocumentRow, TimelineEntry, WorkflowActionInput } from '@procure/schema';
 import {
   Button, Card, Checkbox, cn, EmptyState, Input, Textarea, toast, useVirtualizer,
 } from '@procure/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle2, CircleSlash, Clock, Forward, Keyboard, Lock, PauseCircle, Play, Undo2, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronDown, ChevronUp, CircleSlash, Clock, Forward, Keyboard, Lock, Package, PauseCircle, Play, ShoppingCart, Undo2, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
@@ -19,6 +19,7 @@ import { decisionPrefill } from '@/features/documents/extensions';
 import '@/features/documents/extensions-installed';
 import { DocStatusBadge } from '@/features/documents/status';
 import { dueText } from '@/features/documents/workflow-progress';
+import { stockApi, stockKeys } from '@/features/stock/api';
 import { t } from '@/i18n';
 import { isApiError, type ApiError } from '@/lib/api';
 import {
@@ -72,7 +73,9 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
   const allowed = new Set(doc.allowedActions);
   // The runtime view doesn't carry granularity yet: if the server says "send outcome", switch to document mode.
   const [forceDocument, setForceDocument] = useState(false);
-  const granularity = forceDocument ? 'document' : granularityOf(doc, stage);
+  const [userGranularity, setUserGranularity] = useState<'line' | 'document' | null>(null);
+  const serverGranularity = forceDocument ? 'document' : granularityOf(doc, stage);
+  const granularity = userGranularity ?? serverGranularity;
   const editable = useMemo(() => editableFieldsOf(doc, stage), [doc, stage]);
 
   const lineById = useMemo(() => new Map(doc.lines.map(l => [l.id, l])), [doc.lines]);
@@ -256,6 +259,24 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
 
         {conflict && <InlineAlert tone="warning" className="mb-4" data-testid="approve-conflict">{conflict}</InlineAlert>}
 
+        {/* Item Wise / Doc Wise toggle — always visible above the decision area */}
+        <div className="mb-3 flex overflow-hidden rounded border border-border w-fit" role="group" aria-label="Granularity">
+          <button type="button"
+            onClick={() => setUserGranularity('line')}
+            aria-pressed={granularity === 'line'}
+            className={cn('px-4 py-1.5 text-sm font-semibold transition-colors', granularity === 'line' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}
+            data-testid="granularity-item-wise">
+            Item Wise
+          </button>
+          <button type="button"
+            onClick={() => setUserGranularity('document')}
+            aria-pressed={granularity === 'document'}
+            className={cn('border-l border-border px-4 py-1.5 text-sm font-semibold transition-colors', granularity === 'document' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}
+            data-testid="granularity-doc-wise">
+            Doc Wise
+          </button>
+        </div>
+
         {granularity === 'document' ? (
           <DocumentDecision doc={doc} stage={stage} actions={actions} busy={!!busy} onDecide={async (o, reason) => {
             const next = await run('decide', { action: 'decide', stageKey: stage.key, decisions: [], outcome: o, ...(reason ? { comment: reason } : {}) });
@@ -423,6 +444,143 @@ const ERR_KEY: Record<DraftError, Parameters<typeof t>[0]> = {
   reject_not_allowed: 'approve.err.rejectNotAllowed', partial_not_allowed: 'approve.err.partialNotAllowed',
 };
 
+// ------------------------------------------------------------------------------------------------ item context panel
+
+type ContextSection = 'indent' | 'po' | 'inventory';
+
+function ItemContextPanel({ itemId, uom }: { itemId: string; uom: string }) {
+  const [open, setOpen] = useState<ContextSection | null>(null);
+
+  const indents = useQuery({
+    queryKey: ['item-ctx', 'indent', itemId],
+    queryFn: () => docsApi.list('indent', { view: 'document', item: itemId }, null, 5),
+    enabled: open === 'indent',
+    staleTime: 60_000,
+  });
+  const pos = useQuery({
+    queryKey: ['item-ctx', 'purchase_order', itemId],
+    queryFn: () => docsApi.list('purchase_order', { view: 'document', item: itemId }, null, 5),
+    enabled: open === 'po',
+    staleTime: 60_000,
+  });
+  const inv = useQuery({
+    queryKey: stockKeys.summary(itemId),
+    queryFn: () => stockApi.summary(itemId),
+    enabled: open === 'inventory',
+    staleTime: 60_000,
+  });
+
+  const toggle = (s: ContextSection) => setOpen(o => o === s ? null : s);
+
+  const SectionBtn = ({ id, icon, label }: { id: ContextSection; icon: React.ReactNode; label: string }) => (
+    <button type="button" onClick={e => { e.stopPropagation(); toggle(id); }}
+      className={cn('inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition-colors',
+        open === id ? 'border-accent bg-accent text-white' : 'border-border bg-surface text-fg-muted hover:bg-subtle hover:text-fg')}
+      aria-expanded={open === id}>
+      {icon}{label}{open === id ? <ChevronUp className="size-3" aria-hidden /> : <ChevronDown className="size-3" aria-hidden />}
+    </button>
+  );
+
+  const DocTable = ({ rows, loading }: { rows: DocListRow[] | undefined; loading: boolean }) => {
+    if (loading) return <p className="py-3 text-center text-xs text-fg-muted">Loading…</p>;
+    if (!rows?.length) return <p className="py-3 text-center text-xs text-fg-muted">No records found.</p>;
+    return (
+      <table className="w-full text-xs">
+        <thead><tr className="border-b border-border bg-muted/60 text-left text-fg-muted">
+          <th className="px-3 py-1.5 font-medium">#</th>
+          <th className="px-3 py-1.5 font-medium">Number</th>
+          <th className="px-3 py-1.5 font-medium">Date</th>
+          <th className="px-3 py-1.5 font-medium">Status</th>
+          <th className="px-3 py-1.5 font-medium">Location</th>
+          <th className="px-3 py-1.5 font-medium text-right">Amount</th>
+        </tr></thead>
+        <tbody className="divide-y divide-border">
+          {rows.map((r, i) => (
+            <tr key={r.id} className="hover:bg-muted/40">
+              <td className="px-3 py-1.5 tabular-nums text-fg-muted">{i + 1}</td>
+              <td className="px-3 py-1.5 font-medium text-fg">{r.number ?? '—'}</td>
+              <td className="px-3 py-1.5 tabular-nums text-fg-muted whitespace-nowrap">{new Date(r.docDate).toLocaleDateString()}</td>
+              <td className="px-3 py-1.5"><span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', r.statusKey === 'approved' || r.statusKey === 'completed' ? 'bg-success/15 text-success' : r.statusKey === 'rejected' || r.statusKey === 'cancelled' ? 'bg-danger/15 text-danger' : r.statusKey === 'hold' ? 'bg-warning/15 text-warning' : 'bg-muted text-fg-muted')}>{r.statusLabel}</span></td>
+              <td className="px-3 py-1.5 text-fg-muted">{r.location.name}</td>
+              <td className="px-3 py-1.5 tabular-nums text-right text-fg">{r.totalAmount ? fmtQty(r.totalAmount) : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  };
+
+  return (
+    <div className="mt-2 md:ml-[calc(4.25rem+1.5rem)]">
+      <div className="flex flex-wrap gap-2">
+        <SectionBtn id="indent" icon={<Package className="size-3" aria-hidden />} label="Last 5 Indents" />
+        <SectionBtn id="po" icon={<ShoppingCart className="size-3" aria-hidden />} label="Last 5 POs" />
+        <SectionBtn id="inventory" icon={<Package className="size-3" aria-hidden />} label="Inventory" />
+      </div>
+
+      {open === 'indent' && (
+        <div className="mt-1.5 overflow-hidden rounded border border-border bg-subtle">
+          <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted">Last 5 Indents for this Item</div>
+          <DocTable rows={indents.data?.data as DocListRow[] | undefined} loading={indents.isLoading} />
+        </div>
+      )}
+
+      {open === 'po' && (
+        <div className="mt-1.5 overflow-hidden rounded border border-border bg-subtle">
+          <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted">Last 5 Purchase Orders for this Item</div>
+          <DocTable rows={pos.data?.data as DocListRow[] | undefined} loading={pos.isLoading} />
+        </div>
+      )}
+
+      {open === 'inventory' && (
+        <div className="mt-1.5 overflow-hidden rounded border border-border bg-subtle">
+          <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted">Inventory Summary</div>
+          {inv.isLoading ? (
+            <p className="py-3 text-center text-xs text-fg-muted">Loading…</p>
+          ) : !inv.data ? (
+            <p className="py-3 text-center text-xs text-fg-muted">No inventory data found.</p>
+          ) : (
+            <div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-b border-border px-3 py-2 text-xs sm:grid-cols-4">
+                <div><p className="text-fg-muted">Available</p><p className="font-semibold text-success tabular-nums">{fmtQty(inv.data.totals.available)} {uom}</p></div>
+                <div><p className="text-fg-muted">Quarantine</p><p className="font-semibold text-warning tabular-nums">{fmtQty(inv.data.totals.quarantine)} {uom}</p></div>
+                <div><p className="text-fg-muted">Open PO Qty</p><p className="font-semibold tabular-nums text-fg">{fmtQty(inv.data.totals.openPoQty)} {uom}</p></div>
+                <div><p className="text-fg-muted">Pending Issue</p><p className="font-semibold tabular-nums text-fg">{fmtQty(inv.data.totals.pendingIssueQty)} {uom}</p></div>
+              </div>
+              {inv.data.nodes.length > 0 && (
+                <table className="w-full text-xs">
+                  <thead><tr className="border-b border-border bg-muted/60 text-left text-fg-muted">
+                    <th className="px-3 py-1.5 font-medium">Location</th>
+                    <th className="px-3 py-1.5 font-medium text-right text-success">Available</th>
+                    <th className="px-3 py-1.5 font-medium text-right text-warning">Quarantine</th>
+                    <th className="px-3 py-1.5 font-medium text-right">Open PO</th>
+                    <th className="px-3 py-1.5 font-medium text-right">Pending Issue</th>
+                    <th className="px-3 py-1.5 font-medium text-right">Avg Cost</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-border">
+                    {inv.data.nodes.map(n => (
+                      <tr key={n.node.id} className="hover:bg-muted/40">
+                        <td className="px-3 py-1.5 font-medium text-fg">{n.node.name}</td>
+                        <td className="px-3 py-1.5 tabular-nums text-right text-success">{fmtQty(n.available)}</td>
+                        <td className="px-3 py-1.5 tabular-nums text-right text-warning">{fmtQty(n.quarantine)}</td>
+                        <td className="px-3 py-1.5 tabular-nums text-right text-fg">{fmtQty(n.openPoQty)}</td>
+                        <td className="px-3 py-1.5 tabular-nums text-right text-fg">{fmtQty(n.pendingIssueQty)}</td>
+                        <td className="px-3 py-1.5 tabular-nums text-right text-fg-muted">{n.avgCost ? fmtQty(n.avgCost) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------------------------------------ decision row with history
+
 const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected, error, showErrors, actions, editable, onActivate, onUpdate, onToggle }: {
   d: LineDraft; line: DocumentLineRow; index: number; active: boolean; selected: boolean; error: DraftError | null; showErrors: boolean;
   actions: readonly string[]; editable: string[];
@@ -435,6 +593,13 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected
   const visibleError = error && (error !== 'reason' || showErrors) ? error : null;
   const sumOff = error === 'sum' || error === 'number';
   const id = `dec-${d.lineNo}`;
+
+  const [histOpen, setHistOpen] = useState(false);
+  const lineHistory = useMemo(() => {
+    const hist = (line as unknown as { history?: TimelineEntry[] }).history ?? [];
+    return hist.filter(e => e.kind === 'workflow' || e.kind === 'decision');
+  }, [line]);
+
   const qtyInput = (b: Bucket) => {
     const disabled = (b === 'hold' && !actions.includes('hold')) || (b === 'reject' && !actions.includes('reject'));
     const label = t(`approve.${b}`);
@@ -514,6 +679,74 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected
           {visibleError && <p id={`${id}-err`} role="alert" className="text-xs font-medium text-danger" data-testid={`decision-${d.lineNo}-error`}>{t(ERR_KEY[visibleError], { pending: fmtQty(d.pending) })}</p>}
         </div>
       )}
+
+      {/* Item context: last indents, POs, inventory */}
+      {typeof line.values.item === 'string' && line.values.item && (
+        <ItemContextPanel itemId={line.values.item} uom={lineUom(line)} />
+      )}
+
+      {/* History accordion */}
+      <div className="mt-2 md:ml-[calc(4.25rem+1.5rem)]">
+        <button type="button" onClick={e => { e.stopPropagation(); setHistOpen(v => !v); }}
+          className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg"
+          aria-expanded={histOpen} data-testid={`decision-${d.lineNo}-history-toggle`}>
+          {histOpen ? <ChevronUp className="size-3" aria-hidden /> : <ChevronDown className="size-3" aria-hidden />}
+          History
+        </button>
+        {histOpen && (
+          <div className="mt-1.5 rounded border border-border bg-subtle overflow-hidden" data-testid={`decision-${d.lineNo}-history`}>
+            <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted border-b border-border bg-muted/40">
+              History — {lineItemLabel(line)}
+            </div>
+            {lineHistory.length === 0 ? (
+              <p className="py-3 text-center text-xs text-fg-muted">No history yet.</p>
+            ) : (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border bg-muted/60 text-left text-fg-muted">
+                    <th className="px-3 py-1.5 font-medium">#</th>
+                    <th className="px-3 py-1.5 font-medium">Date &amp; Time</th>
+                    <th className="px-3 py-1.5 font-medium">Action By</th>
+                    <th className="px-3 py-1.5 font-medium">Role</th>
+                    <th className="px-3 py-1.5 font-medium">Action</th>
+                    <th className="px-3 py-1.5 font-medium">Qty</th>
+                    <th className="px-3 py-1.5 font-medium">Remarks</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {lineHistory.map((entry, idx) => {
+                    const ld = entry.lineDecisions?.find((x: { lineNo: number }) => x.lineNo === d.lineNo);
+                    const actionQty = ld ? [
+                      ld.approve && `${fmtQty(ld.approve)} ✓`,
+                      ld.hold && `${fmtQty(ld.hold)} ⏸`,
+                      ld.reject && `${fmtQty(ld.reject)} ✕`,
+                    ].filter(Boolean).join(', ') : '—';
+                    const actionLabel = ld?.approve && !ld?.reject && !ld?.hold ? 'Approved'
+                      : ld?.hold && !ld?.approve && !ld?.reject ? 'On Hold'
+                      : ld?.reject && !ld?.approve && !ld?.hold ? 'Rejected'
+                      : entry.kind === 'workflow' ? 'Decision' : entry.kind;
+                    const actionCls = ld?.approve && !ld?.reject && !ld?.hold ? 'text-success'
+                      : ld?.hold && !ld?.reject ? 'text-warning'
+                      : ld?.reject ? 'text-danger'
+                      : 'text-fg-muted';
+                    return (
+                      <tr key={entry.id} className="hover:bg-muted/40">
+                        <td className="px-3 py-1.5 tabular-nums text-fg-muted">{idx + 1}</td>
+                        <td className="px-3 py-1.5 tabular-nums text-fg-muted whitespace-nowrap">{new Date(entry.at).toLocaleString()}</td>
+                        <td className="px-3 py-1.5 font-medium text-fg">{entry.actor?.name ?? '—'}</td>
+                        <td className="px-3 py-1.5 text-fg-muted">{(entry.actor as { role?: string } | undefined)?.role ?? '—'}</td>
+                        <td className={cn('px-3 py-1.5 font-medium', actionCls)}>{actionLabel}</td>
+                        <td className="px-3 py-1.5 tabular-nums text-fg">{actionQty}</td>
+                        <td className="px-3 py-1.5 text-fg-muted italic max-w-[200px] truncate">{ld?.reason ?? entry.detail ?? '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 });
