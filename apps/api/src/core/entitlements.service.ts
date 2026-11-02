@@ -23,7 +23,7 @@ export interface TenantState {
  */
 @Injectable()
 export class EntitlementsService {
-  private static readonly TTL = 300;
+  private static readonly TTL = 900; // 15 min — tenant plan/status rarely changes; explicit invalidate() handles real changes
   constructor(private readonly db: DbService, private readonly redis: RedisService) {}
 
   async state(tenantId: string): Promise<TenantState | null> {
