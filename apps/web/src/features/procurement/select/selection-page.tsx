@@ -4,7 +4,7 @@ import { Button, Checkbox, cn, Dialog, DialogContent, EmptyState, Input, NativeS
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Award, ListChecks, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { InlineAlert, PageBody, PageHeader } from '@/components/page';
 import { useTenantLocale } from '@/engines/form-renderer/tenant';
@@ -37,7 +37,6 @@ function lineNoOf(l: OrderableLine & { lineNo?: number }) { return l.lineNo ?? l
 export function SelectionPage() {
   const p = usePermissions();
   const flow = useProcurementFlow();
-  const router = useRouter();
   const sp = useSearchParams();
   const qc = useQueryClient();
   const me = useTenantPrincipal();
@@ -85,6 +84,7 @@ export function SelectionPage() {
     return n;
   });
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const canSubmit = p.has(PERM.selectionSubmit);
 
   const canOver = p.has(PERM.overApprove);
   const evaluate = (l: OrderableLine, a: Alloc): Evaluation => {
@@ -133,8 +133,12 @@ export function SelectionPage() {
       void qc.invalidateQueries({ queryKey: procKeys.all });
       void qc.invalidateQueries({ queryKey: docKeys.all('vendor_selection') });
       void qc.invalidateQueries({ queryKey: docKeys.all('indent') });
-      toast.success(mode === 'submit' ? t('proc.sel.submitted', { number: doc.number ?? '' }) : t('proc.sel.saved'));
-      router.push(`/docs/vendor_selection/${doc.id}${mode === 'submit' ? '?submitted=1' : ''}`);
+      // Stay on the page: picked lines are cleared and the list reloads (fully covered lines drop off).
+      const approved = doc.statusKey === 'approved';
+      toast.success(approved ? t('proc.sel.savedApproved', { number: doc.number ?? '' }) : mode === 'submit' ? t('proc.sel.submitted', { number: doc.number ?? '' }) : t('proc.sel.saved'));
+      setAllocs({});
+      setSaving(null);
+      void qc.invalidateQueries({ queryKey: procKeys.selectable(query) });
     } catch (e) {
       setError(isApiError(e) ? e.message : String(e));
       setSaving(null);
@@ -224,17 +228,15 @@ export function SelectionPage() {
             {error && <p className="text-sm text-danger" role="alert" data-testid="select-error">{error}</p>}
           </div>
           <div className="flex gap-2">
-            <Button variant="secondary" disabled={!results.length || !!saving} loading={saving === 'draft'} onClick={() => submit('draft')} data-testid="select-save">{t('proc.sel.saveDraft')}</Button>
-            {p.has(PERM.selectionSubmit) && (
-              <Button disabled={!results.length || !!saving} loading={saving === 'submit'} data-testid="select-submit"
-                onClick={() => { setError(null); if (blocking.length) { setError(t('proc.sel.err.fix', { n: blocking.length })); return; } setConfirmOpen(true); }}>{t('proc.sel.submit')}</Button>
-            )}
+            {/* One Save: submits the selection (auto-approved when its workflow has no active stage); without the submit permission it saves a draft. */}
+            <Button disabled={!results.length || !!saving} loading={!!saving} data-testid="select-submit"
+              onClick={() => { setError(null); if (blocking.length) { setError(t('proc.sel.err.fix', { n: blocking.length })); return; } setConfirmOpen(true); }}>{t('proc.sel.save')}</Button>
           </div>
         </div>
       </div>
       {confirmOpen && (
-        <SelectionConfirmDialog results={results} currency={currency} busy={saving === 'submit'}
-          onCancel={() => setConfirmOpen(false)} onConfirm={() => { void submit('submit').finally(() => setConfirmOpen(false)); }} />
+        <SelectionConfirmDialog results={results} currency={currency} busy={!!saving}
+          onCancel={() => setConfirmOpen(false)} onConfirm={() => { void submit(canSubmit ? 'submit' : 'draft').finally(() => setConfirmOpen(false)); }} />
       )}
     </PageBody>
   );
@@ -465,7 +467,7 @@ function SelectionConfirmDialog({ results, currency, busy, onCancel, onConfirm }
       <DialogContent size="lg" title={t('proc.sel.confirm.title')} description={t('proc.sel.confirm.summary', { lines: results.length, vendors: byVendor.size })} data-testid="select-confirm-dialog"
         footer={<>
           <Button variant="secondary" onClick={onCancel} disabled={busy} data-testid="select-confirm-cancel">{t('common.cancel')}</Button>
-          <Button onClick={onConfirm} loading={busy} data-testid="select-confirm-ok">{t('proc.sel.submit')}</Button>
+          <Button onClick={onConfirm} loading={busy} data-testid="select-confirm-ok">{t('proc.sel.save')}</Button>
         </>}>
         <div className="max-h-[55vh] overflow-auto rounded border border-border">
           <table className="w-full text-sm">
