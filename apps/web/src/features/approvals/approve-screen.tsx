@@ -452,7 +452,7 @@ function QuickButton({ tone, label, onClick, pressed, testId, wide, disabled, sh
 
 type ContextSection = 'indent' | 'po' | 'inventory';
 
-function ItemContextPanel({ itemId, uom }: { itemId: string; uom: string }) {
+export function ItemContextPanel({ itemId, uom, indent = true }: { itemId: string; uom: string; indent?: boolean }) {
   const [open, setOpen] = useState<ContextSection | null>(null);
 
   const indents = useQuery({
@@ -515,7 +515,7 @@ function ItemContextPanel({ itemId, uom }: { itemId: string; uom: string }) {
   };
 
   return (
-    <div className="mt-2 md:ml-[calc(4.25rem+1.5rem)]">
+    <div className={cn('mt-2', indent && 'md:ml-[calc(2.25rem+0.75rem)]')}>
       <div className="flex flex-wrap gap-2">
         <SectionBtn id="indent" icon={<Package className="size-3" aria-hidden />} label="Last 5 Indents" />
         <SectionBtn id="po" icon={<ShoppingCart className="size-3" aria-hidden />} label="Last 5 POs" />
@@ -597,11 +597,6 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, value, c
   const original = typeof line.values.qty === 'string' || typeof line.values.qty === 'number' ? String(line.values.qty) : null;
   const added = original && isDecimal(original) && dec.cmp(line.qty.requested, original) > 0 ? dec.sub(line.qty.requested, original) : null;
 
-  const [histOpen, setHistOpen] = useState(false);
-  const lineHistory = useMemo(() => {
-    const hist = (line as unknown as { history?: TimelineEntry[] }).history ?? [];
-    return hist.filter(e => e.kind === 'workflow');
-  }, [line]);
 
   return (
     <div role="listitem" data-row-index={index} data-testid={`decision-row-${d.lineNo}`} onClick={() => onActivate(index)}
@@ -660,16 +655,28 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, value, c
         <ItemContextPanel itemId={line.values.item} uom={lineUom(line)} />
       )}
 
-      {/* History accordion */}
-      <div className="mt-2 md:ml-[calc(2.25rem+0.75rem)]">
+      <LineHistory line={line} lineNo={d.lineNo} />
+    </div>
+  );
+});
+
+/** Per-line approval history (who decided what, qty, remarks), collapsed by default. */
+export function LineHistory({ line, lineNo, indent = true }: { line: DocumentLineRow; lineNo: number; indent?: boolean }) {
+  const [histOpen, setHistOpen] = useState(false);
+  const lineHistory = useMemo(() => {
+    const hist = (line as unknown as { history?: TimelineEntry[] }).history ?? [];
+    return hist.filter(e => e.kind === 'workflow');
+  }, [line]);
+  return (
+      <div className={cn('mt-2', indent && 'md:ml-[calc(2.25rem+0.75rem)]')}>
         <button type="button" onClick={e => { e.stopPropagation(); setHistOpen(v => !v); }}
           className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg"
-          aria-expanded={histOpen} data-testid={`decision-${d.lineNo}-history-toggle`}>
+          aria-expanded={histOpen} data-testid={`decision-${lineNo}-history-toggle`}>
           {histOpen ? <ChevronUp className="size-3" aria-hidden /> : <ChevronDown className="size-3" aria-hidden />}
           History
         </button>
         {histOpen && (
-          <div className="mt-1.5 rounded border border-border bg-subtle overflow-hidden" data-testid={`decision-${d.lineNo}-history`}>
+          <div className="mt-1.5 rounded border border-border bg-subtle overflow-hidden" data-testid={`decision-${lineNo}-history`}>
             <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted border-b border-border bg-muted/40">
               History — {lineItemLabel(line)}
             </div>
@@ -690,7 +697,7 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, value, c
                 </thead>
                 <tbody className="divide-y divide-border">
                   {lineHistory.map((entry, idx) => {
-                    const ld = entry.lineDecisions?.find((x: { lineNo: number }) => x.lineNo === d.lineNo);
+                    const ld = entry.lineDecisions?.find((x: { lineNo: number }) => x.lineNo === lineNo);
                     const actionQty = ld ? [
                       ld.approve && `${fmtQty(ld.approve)} ✓`,
                       ld.hold && `${fmtQty(ld.hold)} ⏸`,
@@ -722,9 +729,8 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, value, c
           </div>
         )}
       </div>
-    </div>
   );
-});
+}
 
 // ------------------------------------------------------------------------------------------------ held lines
 

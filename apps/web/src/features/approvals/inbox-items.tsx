@@ -4,12 +4,13 @@ import { Button, Checkbox, cn, EmptyState, Input, Skeleton, toast } from '@procu
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { Inbox } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useMemo, useState } from 'react';
+import { Fragment, useCallback, useMemo, useState } from 'react';
 import { docKeys, docsApi, newIdempotencyKey } from '@/features/documents/api';
 import { dec, fmtQty, isDecimal } from '@/features/documents/decimal';
 import { lineItemLabel, lineUom } from '@/features/documents/lines-table';
 import { t } from '@/i18n';
 import { isApiError } from '@/lib/api';
+import { ItemContextPanel, LineHistory } from './approve-screen';
 import { ConfirmDecisionDialog, type ConfirmRow, type DecisionKind } from './confirm-dialog';
 
 interface ItemRow { key: string; i: InboxItem; doc: DocumentRow; line: DocumentLineRow; pending: string }
@@ -142,15 +143,17 @@ export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
               <th className="w-40 px-3 py-2 text-right font-medium">{t('approve.qtyToAct')}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border">
+          <tbody className="[&>tr:nth-child(even)]:border-b [&>tr:nth-child(even)]:border-border">
             {items.map(r => {
               const v = qtys[r.key] ?? '';
               const on = typed(r.key);
               const bad = on && (!isDecimal(v.trim()) || !dec.gt0(v.trim()));
               const over = on && !bad && dec.cmp(v.trim(), r.pending) > 0;
               const uom = lineUom(r.line);
+              const rowCls = on ? 'bg-accent-soft/40' : '';
               return (
-                <tr key={r.key} className={cn(on ? 'bg-accent-soft/40' : 'hover:bg-subtle')} data-testid={`inbox-item-${r.i.number ?? r.i.documentId}-${r.line.lineNo}`}>
+                <Fragment key={r.key}>
+                <tr className={cn('border-b-0', rowCls)} data-testid={`inbox-item-${r.i.number ?? r.i.documentId}-${r.line.lineNo}`}>
                   <td className="px-3 py-2"><Checkbox checked={on} onCheckedChange={() => toggle(r)} aria-label={t('approve.selectLine', { n: r.line.lineNo })} /></td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     <Link href={`/docs/${r.i.docTypeKey}/${r.i.documentId}/approve?stage=${encodeURIComponent(r.i.stageKey)}`} className="font-medium tabular-nums hover:text-accent hover:underline">{r.i.number ?? t('docs.draft')}</Link>
@@ -170,6 +173,15 @@ export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
                     </p>}
                   </td>
                 </tr>
+                {/* Item context below each row: last indents / POs / inventory, and the line's approval history */}
+                <tr className={rowCls} data-testid={`inbox-item-details-${r.i.number ?? r.i.documentId}-${r.line.lineNo}`}>
+                  <td />
+                  <td colSpan={6} className="px-3 pb-3 pt-0">
+                    {typeof r.line.values.item === 'string' && r.line.values.item && <ItemContextPanel itemId={r.line.values.item} uom={uom} indent={false} />}
+                    <LineHistory line={r.line} lineNo={r.line.lineNo} indent={false} />
+                  </td>
+                </tr>
+                </Fragment>
               );
             })}
           </tbody>
