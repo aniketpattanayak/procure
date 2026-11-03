@@ -17,14 +17,14 @@ const ROW_H = 41;
 function colWidth(c: GridColumn): number {
   switch (c.type) {
     case 'checkbox': case 'toggle': return 60;
-    case 'number': case 'decimal': case 'percentage': return 100;
-    case 'currency': case 'formula': return 110;
-    case 'date': case 'time': return 120;
-    case 'datetime': case 'daterange': return 180;
-    case 'lookup': case 'multilookup': case 'multiselect': return 150;
-    case 'file': case 'image': case 'files': case 'signature': return 180;
-    case 'textarea': return 180;
-    default: return 150;
+    case 'number': case 'decimal': case 'percentage': return 85;
+    case 'currency': case 'formula': return 95;
+    case 'date': case 'time': return 100;
+    case 'datetime': case 'daterange': return 150;
+    case 'lookup': case 'multilookup': case 'multiselect': return 120;
+    case 'file': case 'image': case 'files': case 'signature': return 150;
+    case 'textarea': return 140;
+    default: return 120;
   }
 }
 
@@ -146,13 +146,13 @@ export function LineGrid({ field, readOnly }: { field: GridField; readOnly: bool
         <table className="w-full border-separate border-spacing-0 text-base" aria-rowcount={rows.length + 1}>
           <thead className="sticky top-0 z-20 bg-subtle">
             <tr>
-              <th scope="col" className="sticky left-0 z-30 w-10 min-w-10 border-b border-r border-border bg-subtle px-2 py-2 text-right text-xs font-medium text-fg-subtle">#</th>
+              <th scope="col" className="sticky left-0 z-30 w-10 min-w-10 border-b border-r border-border bg-subtle px-2 py-1 text-right text-xs font-medium text-fg-subtle">#</th>
               {cols.map(c => {
                 const st = ctx.state[`${field.key}.${c.key}`];
                 const req = c.type !== 'formula' && (c.required || st?.required);
                 return (
                   <th key={c.key} scope="col" style={{ minWidth: colWidth(c) }}
-                    className={cn('border-b border-border px-2 py-2 text-left text-sm font-medium text-fg-muted', c.key === firstCol && 'sticky left-10 z-30 border-r bg-subtle', (NUMERIC_TYPES.has(c.type) || c.type === 'formula') && 'text-right')}>
+                    className={cn('border-b border-border px-2 py-1 text-left text-sm font-medium text-fg-muted', c.key === firstCol && 'sticky left-10 z-30 border-r bg-subtle', (NUMERIC_TYPES.has(c.type) || c.type === 'formula') && 'text-right')}>
                     <span className="inline-flex items-center gap-1">
                       {c.type === 'formula' && <span className="rounded-sm bg-accent-soft px-1 text-[0.7rem] font-semibold text-accent" aria-hidden>ƒx</span>}
                       {c.label}
@@ -187,7 +187,7 @@ export function LineGrid({ field, readOnly }: { field: GridField; readOnly: bool
                         <td key={c.key} data-cell data-row={i} data-col={c.key} data-testid={`field-${field.key}-${i}-${c.key}`}
                           className={cn('border-b border-border p-0 align-top', c.key === firstCol && 'sticky left-10 z-10 border-r bg-surface group-hover:bg-subtle', err && 'bg-danger-soft/40')}>
                           {view ? (
-                            <div className="px-2 py-1"><ReadValue field={c as ControlField} value={value} scope={scope} testId={`field-${field.key}-${i}-${c.key}-value`} /></div>
+                            <div className="px-1.5 py-0.5"><ReadValue field={c as ControlField} value={value} scope={scope} testId={`field-${field.key}-${i}-${c.key}-value`} /></div>
                           ) : (
                             <FieldControl
                               field={c as ControlField}
@@ -238,7 +238,7 @@ export function LineGrid({ field, readOnly }: { field: GridField; readOnly: bool
               <tr>
                 <th scope="row" className="sticky left-0 z-30 border-r border-t border-border bg-subtle px-2 text-right text-xs font-medium text-fg-subtle">Σ</th>
                 {cols.map((c, j) => (
-                  <td key={c.key} className={cn('border-t border-border px-2 py-2 text-right text-sm font-semibold tabular-nums', c.key === firstCol && 'sticky left-10 z-30 border-r bg-subtle text-left font-medium text-fg-muted')} data-testid={totals[j] ? `grid-${field.key}-total-${c.key}` : undefined}>
+                  <td key={c.key} className={cn('border-t border-border px-2 py-1 text-right text-sm font-semibold tabular-nums', c.key === firstCol && 'sticky left-10 z-30 border-r bg-subtle text-left font-medium text-fg-muted')} data-testid={totals[j] ? `grid-${field.key}-total-${c.key}` : undefined}>
                     {c.key === firstCol && !totals[j] ? t('fr.grid.total') : totals[j] ? formatDecimal(totals[j]!.sum, totals[j]!.places, { currency: totals[j]!.currency }) : ''}
                   </td>
                 ))}

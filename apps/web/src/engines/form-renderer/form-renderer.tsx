@@ -304,7 +304,7 @@ export function FormRenderer({
 
   return (
     <RendererContext.Provider value={ctx}>
-      <div className={cn('space-y-6', className)} data-testid={`form-${form.formKey}`} data-mode={mode}>
+      <div className={cn('space-y-4', className)} data-testid={`form-${form.formKey}`} data-mode={mode}>
         {formErrors.length > 0 && (
           <div role="alert" className="space-y-1 rounded border border-danger/30 bg-danger-soft px-3 py-2.5 text-danger" data-testid="form-rule-errors">
             {formErrors.map(([p, m]) => <p key={p} className="flex items-start gap-2"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />{m}</p>)}
@@ -325,7 +325,7 @@ export function FormRenderer({
               })}
             </TabsList>
             {tabbed.map(g => (
-              <TabsContent key={g.el!.key} value={g.el!.key} forceMount className="space-y-6 data-[state=inactive]:hidden">{renderTab(g)}</TabsContent>
+              <TabsContent key={g.el!.key} value={g.el!.key} forceMount className="space-y-4 data-[state=inactive]:hidden">{renderTab(g)}</TabsContent>
             ))}
           </Tabs>
         )}
@@ -345,14 +345,14 @@ function SectionBlock({ group }: { group: SectionGroup }) {
   if (el && ctx.state[el.key]?.visible === false) return null;
   const columns = el?.columns ?? 1;
   const body = (
-    <div className="grid grid-cols-1 gap-x-4 gap-y-4 md:grid-cols-12">
+    <div className="grid grid-cols-1 gap-x-3 gap-y-2 md:grid-cols-12">
       {group.items.map(f => <FieldBlock key={f.key} field={f} span={spanOf(f, columns)} />)}
     </div>
   );
   if (!el) return body;
   const headId = `${ctx.idPrefix}-sec-${el.key}`;
   return (
-    <section aria-labelledby={el.label ? headId : undefined} data-testid={`section-${el.key}`} className="space-y-3">
+    <section aria-labelledby={el.label ? headId : undefined} data-testid={`section-${el.key}`} className="space-y-2">
       {el.label && (
         <div className="flex items-center gap-2 border-b border-border pb-1.5">
           {el.collapsible ? (
@@ -442,7 +442,7 @@ function Shell({ id, label, required, readOnly, help, error, inline, computed, a
     </label>
   );
   return (
-    <div className="flex flex-col gap-1.5" role={asGroup ? 'group' : undefined} aria-labelledby={asGroup ? `${id}-label` : undefined}>
+    <div className="flex flex-col gap-1" role={asGroup ? 'group' : undefined} aria-labelledby={asGroup ? `${id}-label` : undefined}>
       {inline ? <div className="flex min-h-9 items-center gap-3">{children({ describedBy })}{labelEl}</div> : <>{labelEl}{children({ describedBy })}</>}
       {help && !error && <p id={helpId} className="text-xs text-fg-subtle">{help}</p>}
       {error && <p id={errId} role="alert" className="text-xs font-medium text-danger" data-testid="field-error">{error}</p>}

@@ -197,7 +197,7 @@ export function DataTable<T>({
             {table.getHeaderGroups().map(hg => (
               <div role="row" key={hg.id} className="grid" style={{ gridTemplateColumns: template }}>
                 {hg.headers.map(h => (
-                  <div role="columnheader" key={h.id} aria-sort={(h.column.columnDef as DataTableColumn<T>).ariaSort} className={cn('flex h-9 items-center px-3 text-sm font-medium text-fg-muted', (h.column.columnDef as DataTableColumn<T>).align === 'right' && 'justify-end')}>
+                  <div role="columnheader" key={h.id} aria-sort={(h.column.columnDef as DataTableColumn<T>).ariaSort} className={cn('flex h-8 items-center px-2 text-sm font-medium text-fg-muted', (h.column.columnDef as DataTableColumn<T>).align === 'right' && 'justify-end')}>
                     {h.isPlaceholder ? null : flexRender(h.column.columnDef.header, h.getContext())}
                   </div>
                 ))}
@@ -210,7 +210,7 @@ export function DataTable<T>({
               {Array.from({ length: 8 }, (_, i) => (
                 <div role="row" key={i} className="grid items-center border-b border-border" style={{ gridTemplateColumns: template, height: rowHeight }}>
                   {visibleCols.map((c, j) => (
-                    <div role="cell" key={c.id} className="px-3"><Skeleton className={cn('h-4', j === 0 ? 'w-3/4' : 'w-1/2')} /></div>
+                    <div role="cell" key={c.id} className="px-2"><Skeleton className={cn('h-4', j === 0 ? 'w-3/4' : 'w-1/2')} /></div>
                   ))}
                 </div>
               ))}
@@ -236,7 +236,7 @@ export function DataTable<T>({
                       style={{ gridTemplateColumns: template, height: rowHeight }}
                     >
                       {row.getVisibleCells().map(cell => (
-                        <div role="cell" key={cell.id} className={cn('min-w-0 truncate px-3', (cell.column.columnDef as DataTableColumn<T>).align === 'right' && 'text-right tabular')}>
+                        <div role="cell" key={cell.id} className={cn('min-w-0 truncate px-2', (cell.column.columnDef as DataTableColumn<T>).align === 'right' && 'text-right tabular')}>
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </div>
                       ))}
@@ -261,7 +261,7 @@ export function DataTable<T>({
           </div>
         )}
         {!initial && status === 'loading' && rows.length > 0 && (
-          <div className="flex items-center gap-2 border-t border-border px-3" style={{ height: rowHeight }} aria-hidden>
+          <div className="flex items-center gap-2 border-t border-border px-2" style={{ height: rowHeight }} aria-hidden>
             <Skeleton className="h-4 w-1/3" />
           </div>
         )}
