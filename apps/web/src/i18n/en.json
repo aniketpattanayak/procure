@@ -2231,6 +2231,7 @@
   "proc.sel.confirm.title": "Confirm vendor selection",
   "proc.sel.confirm.summary": "{lines} indent line(s) to {vendors} vendor(s). Check below, then save.",
   "proc.sel.confirm.indent": "Indent",
+  "proc.sel.confirm.location": "Location",
   "proc.sel.confirm.item": "Item",
   "proc.sel.confirm.qty": "Qty",
   "proc.sel.confirm.amount": "Amount",

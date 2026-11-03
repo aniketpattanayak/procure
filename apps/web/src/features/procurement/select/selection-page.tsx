@@ -455,29 +455,58 @@ function SelectableLineRow({ line: l, alloc, ev, currency, showItem, onToggle, o
 function SelectionConfirmDialog({ results, currency, busy, onCancel, onConfirm }: {
   results: { l: OrderableLine; a: Alloc }[]; currency: string; busy: boolean; onCancel: () => void; onConfirm: () => void;
 }) {
-  const rows = results.flatMap(r => r.a.rows.map(row => ({
-    key: `${r.l.indentLineId}-${row.key}`, indent: r.l.indentNumber ?? '', item: r.l.item?.name ?? '—', vendor: row.vendor?.name ?? '—',
-    qty: row.qty, uom: r.l.uom ?? '', rate: row.rate, amount: num(row.qty) * num(row.rate),
-  })));
+  const qc = useQueryClient();
+  const rows = results.flatMap(r => {
+    // Pull the cached comparison sheet for this line to get quote-level detail.
+    const sheet = qc.getQueryData<ComparisonSheet>(procKeys.lineComparison(r.l.indentLineId, r.l.pendingOrder));
+    return r.a.rows.map(row => {
+      const vendorSheet = sheet?.vendors.find(v => (row.quoteId ? v.quoteId === row.quoteId : v.vendor.id === row.vendor?.id));
+      return {
+        key: `${r.l.indentLineId}-${row.key}`,
+        indent: r.l.indentNumber ?? '',
+        location: r.l.location.name,
+        item: r.l.item?.name ?? '—',
+        vendor: row.vendor?.name ?? '—',
+        qty: row.qty,
+        uom: r.l.uom ?? '',
+        rate: row.rate,
+        amount: num(row.qty) * num(row.rate),
+        freightPerUnit: vendorSheet?.freightPerUnit ?? null,
+        taxPct: vendorSheet?.taxPct ?? null,
+        landedPerUnit: vendorSheet?.landedCostPerUnit ?? null,
+        leadTimeDays: vendorSheet?.leadTimeDays ?? null,
+        validUntil: vendorSheet?.validUntil ?? null,
+        paymentTerms: vendorSheet?.paymentTerms ?? null,
+      };
+    });
+  });
   const byVendor = new Map<string, number>();
   for (const r of rows) byVendor.set(r.vendor, (byVendor.get(r.vendor) ?? 0) + r.amount);
   const grand = rows.reduce((s, r) => s + r.amount, 0);
+  const COL_COUNT = 12;
   return (
     <Dialog open onOpenChange={o => { if (!o && !busy) onCancel(); }}>
-      <DialogContent size="lg" title={t('proc.sel.confirm.title')} description={t('proc.sel.confirm.summary', { lines: results.length, vendors: byVendor.size })} data-testid="select-confirm-dialog"
+      <DialogContent size="lg" className="sm:max-w-[90vw] xl:max-w-7xl" title={t('proc.sel.confirm.title')} description={t('proc.sel.confirm.summary', { lines: results.length, vendors: byVendor.size })} data-testid="select-confirm-dialog"
         footer={<>
           <Button variant="secondary" onClick={onCancel} disabled={busy} data-testid="select-confirm-cancel">{t('common.cancel')}</Button>
           <Button onClick={onConfirm} loading={busy} data-testid="select-confirm-ok">{t('proc.sel.save')}</Button>
         </>}>
-        <div className="max-h-[55vh] overflow-auto rounded border border-border">
+        <div className="max-h-[60vh] overflow-auto rounded border border-border">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-subtle text-left text-xs text-fg-muted">
               <tr>
                 <th className="px-3 py-2 font-medium">{t('proc.sel.confirm.indent')}</th>
+                <th className="px-3 py-2 font-medium">{t('proc.sel.confirm.location')}</th>
                 <th className="px-3 py-2 font-medium">{t('proc.sel.confirm.item')}</th>
                 <th className="px-3 py-2 font-medium">{t('proc.sel.q.vendor')}</th>
                 <th className="px-3 py-2 text-right font-medium">{t('proc.sel.confirm.qty')}</th>
                 <th className="px-3 py-2 text-right font-medium">{t('proc.sel.q.rate')}</th>
+                <th className="px-3 py-2 text-right font-medium">{t('proc.sel.q.freight')}</th>
+                <th className="px-3 py-2 text-right font-medium">{t('proc.sel.q.tax')}</th>
+                <th className="px-3 py-2 text-right font-medium">{t('proc.sel.q.landed')}</th>
+                <th className="px-3 py-2 text-right font-medium">{t('proc.sel.q.lead')}</th>
+                <th className="px-3 py-2 font-medium">{t('proc.sel.q.valid')}</th>
+                <th className="px-3 py-2 font-medium">{t('proc.sel.q.terms')}</th>
                 <th className="px-3 py-2 text-right font-medium">{t('proc.sel.confirm.amount')}</th>
               </tr>
             </thead>
@@ -485,19 +514,26 @@ function SelectionConfirmDialog({ results, currency, busy, onCancel, onConfirm }
               {rows.map(r => (
                 <tr key={r.key}>
                   <td className="px-3 py-2 whitespace-nowrap tabular-nums">{r.indent}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{r.location}</td>
                   <td className="px-3 py-2">{r.item}</td>
                   <td className="px-3 py-2">{r.vendor}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtQty(r.qty)} <span className="text-fg-subtle">{r.uom}</span></td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtRate(r.rate, currency)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{r.freightPerUnit !== null ? fmtRate(r.freightPerUnit, currency) : '—'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{r.taxPct !== null ? `${r.taxPct}%` : '—'}</td>
+                  <td className="px-3 py-2 text-right font-semibold tabular-nums">{r.landedPerUnit !== null ? fmtRate(r.landedPerUnit, currency) : '—'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{r.leadTimeDays !== null ? t('proc.sel.q.leadDays', { n: r.leadTimeDays }) : '—'}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{r.validUntil ? fmtDate(r.validUntil) : '—'}</td>
+                  <td className="px-3 py-2">{r.paymentTerms ?? '—'}</td>
                   <td className="px-3 py-2 text-right font-medium tabular-nums">{fmtRate(r.amount, currency)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot className="border-t border-border bg-subtle text-sm">
               {[...byVendor.entries()].map(([v, amt]) => (
-                <tr key={v}><td className="px-3 py-1.5 text-fg-muted" colSpan={5}>{t('proc.sel.confirm.vendorTotal', { vendor: v })}</td><td className="px-3 py-1.5 text-right tabular-nums">{fmtRate(amt, currency)}</td></tr>
+                <tr key={v}><td className="px-3 py-1.5 text-fg-muted" colSpan={COL_COUNT}>{t('proc.sel.confirm.vendorTotal', { vendor: v })}</td><td className="px-3 py-1.5 text-right tabular-nums">{fmtRate(amt, currency)}</td></tr>
               ))}
-              <tr className="font-semibold"><td className="px-3 py-2" colSpan={5}>{t('proc.sel.confirm.grand')}</td><td className="px-3 py-2 text-right tabular-nums">{fmtRate(grand, currency)}</td></tr>
+              <tr className="font-semibold"><td className="px-3 py-2" colSpan={COL_COUNT}>{t('proc.sel.confirm.grand')}</td><td className="px-3 py-2 text-right tabular-nums">{fmtRate(grand, currency)}</td></tr>
             </tfoot>
           </table>
         </div>

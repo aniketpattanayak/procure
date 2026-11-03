@@ -88,7 +88,7 @@ export const SelectionCreate = z.object({
 
 /** Lines available to order: approved selection lines (or approved indent lines when vendor selection is off). */
 export interface OrderableLine {
-  sourceLineId: string; sourceKind: 'selection' | 'indent'; indentLineId: string; indentNumber: string | null; lineNo: number;
+  sourceLineId: string; sourceKind: 'selection' | 'indent'; indentLineId: string; indentNumber: string | null; selectionNumber: string | null; lineNo: number;
   item: { id: string; code: string; name: string } | null; uom: string | null;
   vendor: { id: string; code: string; name: string } | null; rate: string | null;
   location: { id: string; name: string }; requiredDate: string | null; pendingOrder: string;

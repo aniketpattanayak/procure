@@ -72,7 +72,7 @@ export class SelectionService implements OnModuleInit {
     }
     const rows = await qb.orderBy('l.created_at').orderBy('l.id').limit(q.limit + 1).execute();
     return toPage(rows, q.limit, r => ({ t: r.created_at, id: r.id }), (r): OrderableLine => ({
-      sourceLineId: r.id, sourceKind: 'indent', indentLineId: r.id, indentNumber: r.number, lineNo: r.line_no,
+      sourceLineId: r.id, sourceKind: 'indent', indentLineId: r.id, indentNumber: r.number, selectionNumber: null, lineNo: r.line_no,
       item: r.item_id ? { id: r.item_id, code: r.item_code ?? '', name: r.item_name ?? '' } : null, uom: r.uom_code ?? null, vendor: null, rate: null,
       location: { id: r.location_node_id, name: r.loc_name }, requiredDate: r.required_date ? dateOnly(r.required_date) : null,
       pendingOrder: fromUnits(toUnits(new Decimal(r.avail).toDecimalPlaces(4).toFixed())),

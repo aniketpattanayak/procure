@@ -1,6 +1,6 @@
 'use client';
 import type { DocumentRow, OrderableLine } from '@procure/schema';
-import { Badge, Button, Card, Checkbox, cn, Dialog, DialogContent, EmptyState, Input, Label, NativeSelect, Skeleton, toast } from '@procure/ui';
+import { Button, Card, Checkbox, cn, Dialog, DialogContent, EmptyState, Input, Label, NativeSelect, Skeleton, toast } from '@procure/ui';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, CheckCircle2, PackagePlus, Search } from 'lucide-react';
 import Link from 'next/link';
@@ -173,54 +173,84 @@ export function OrderPage() {
           ) : rows.length === 0 ? (
             <EmptyState icon={<PackagePlus />} title={t('order.empty')} description={t('order.emptyHint')} />
           ) : (
-            <div className="overflow-hidden rounded-lg border border-border" data-testid="order-page">
-              <div className="flex items-center gap-3 border-b border-border bg-subtle px-3 py-2 text-sm">
-                <Checkbox checked={allOn ? true : chosen.length ? 'indeterminate' : false} onCheckedChange={c => rows.forEach(r => toggle(r, !!c))} aria-label={t('order.selectAll')} data-testid="order-select-all" />
-                <span className="text-fg-muted">{t('order.countLines', { n: rows.length })}</span>
-              </div>
-              <ul className="divide-y divide-border">
-                {rows.map(l => {
-                  const pk = picks[l.sourceLineId];
-                  const k = rowKey(l);
-                  const prob = pk ? problemOf(l, pk) : null;
-                  return (
-                    <li key={l.sourceLineId} className={cn('px-3 py-2.5', pk && 'bg-accent-soft/40')} data-testid={`order-line-${k}`} data-source={l.sourceKind} data-pending={l.pendingOrder}>
-                      <div className="flex items-start gap-3">
-                        <Checkbox className="mt-1" checked={!!pk} onCheckedChange={c => toggle(l, !!c)} data-testid={`order-pick-${k}`} aria-label={t('order.pickLine', { item: l.item?.name ?? '', number: l.indentNumber ?? '' })} />
-                        <div className="grid min-w-0 flex-1 gap-x-4 gap-y-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{l.item?.name ?? '—'} <span className="font-normal text-fg-subtle">{l.item?.code}</span></p>
-                            <p className="truncate text-sm text-fg-muted">
-                              <Badge tone={l.sourceKind === 'selection' ? 'accent' : 'neutral'} className="mr-1.5">{t(l.sourceKind === 'selection' ? 'order.src.selection' : 'order.src.indent')}</Badge>
-                              {l.indentNumber ?? '—'} · {l.location.name}{l.requiredDate ? ` · ${t('proc.quotes.needBy', { date: fmtDate(l.requiredDate) })}` : ''}
-                            </p>
-                            {l.vendor && <p className="truncate text-sm">{l.vendor.name}{l.rate ? <span className="text-fg-muted"> · {fmtRate(l.rate, currency)}/{l.uom ?? t('proc.unit')}</span> : null}</p>}
-                          </div>
-                          <p className="text-right text-sm text-fg-muted tabular-nums sm:self-start">{t('order.pendingQty', { qty: fmtQty(l.pendingOrder), uom: l.uom ?? '' })}</p>
-                        </div>
-                      </div>
-                      {pk && (
-                        <div className="mt-2 grid grid-cols-2 gap-2 pl-7 sm:grid-cols-[8rem_minmax(0,1fr)_8rem]">
-                          <div className="relative">
-                            <Input inputMode="decimal" className="h-8 pr-10" value={pk.qty} onChange={e => set(l.sourceLineId, { qty: e.target.value })} aria-label={t('order.qtyToOrder')} aria-invalid={!!prob && prob.includes(fmtQty(l.pendingOrder)) || undefined} data-testid={`order-qty-${k}`} />
-                            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-fg-subtle">{l.uom}</span>
-                          </div>
-                          {l.sourceKind === 'indent' ? (
-                            <>
-                              <div className="col-span-2 row-start-2 sm:col-span-1 sm:row-start-auto"><MasterPicker masterKey="vendor" value={pk.vendor} onChange={v => set(l.sourceLineId, { vendor: v })} ariaLabel={t('order.vendor')} placeholder={t('order.vendor')} compact testId={`order-vendor-${k}`} /></div>
+            <div className="overflow-x-auto overflow-hidden rounded-lg border border-border" data-testid="order-page">
+              <table className="w-full text-sm">
+                <thead className="bg-subtle text-left text-xs text-fg-muted">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">
+                      <Checkbox checked={allOn ? true : chosen.length ? 'indeterminate' : false} onCheckedChange={c => rows.forEach(r => toggle(r, !!c))} aria-label={t('order.selectAll')} data-testid="order-select-all" />
+                    </th>
+                    <th className="px-3 py-2 font-medium">{t('proc.filter.item')}</th>
+                    <th className="px-3 py-2 font-medium">VS No.</th>
+                    <th className="px-3 py-2 font-medium">Indent No.</th>
+                    <th className="px-3 py-2 font-medium">{t('proc.filter.location')}</th>
+                    <th className="px-3 py-2 font-medium">{t('order.vendor')}</th>
+                    <th className="px-3 py-2 font-medium">{t('order.rate')}</th>
+                    <th className="px-3 py-2 font-medium">{t('order.qtyToOrder')}</th>
+                    <th className="px-3 py-2 font-medium">Required Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(l => {
+                    const pk = picks[l.sourceLineId];
+                    const k = rowKey(l);
+                    const prob = pk ? problemOf(l, pk) : null;
+                    return (
+                      <tr key={l.sourceLineId} className={cn('border-t border-border', pk && 'bg-accent-soft/40')} data-testid={`order-line-${k}`} data-source={l.sourceKind} data-pending={l.pendingOrder}>
+                        <td className="px-3 py-2.5">
+                          <Checkbox checked={!!pk} onCheckedChange={c => toggle(l, !!c)} data-testid={`order-pick-${k}`} aria-label={t('order.pickLine', { item: l.item?.name ?? '', number: l.indentNumber ?? '' })} />
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <p className="font-medium">{l.item?.name ?? '—'}</p>
+                          <p className="text-xs text-fg-subtle">{l.item?.code}</p>
+                        </td>
+                        <td className="px-3 py-2.5 tabular-nums">
+                          {l.sourceKind === 'selection' && l.selectionNumber ? (
+                            <span className="font-medium">{l.selectionNumber}</span>
+                          ) : '—'}
+                        </td>
+                        <td className="px-3 py-2.5 tabular-nums text-fg-muted">
+                          {l.indentNumber ?? '—'}
+                        </td>
+                        <td className="px-3 py-2.5 text-fg-muted">{l.location.name}</td>
+                        <td className="min-w-[10rem] px-3 py-2.5">
+                          {pk && l.sourceKind === 'indent' ? (
+                            <MasterPicker masterKey="vendor" value={pk.vendor} onChange={v => set(l.sourceLineId, { vendor: v })} ariaLabel={t('order.vendor')} placeholder={t('order.vendor')} compact testId={`order-vendor-${k}`} />
+                          ) : (
+                            <span className="text-fg-muted">{l.vendor?.name ?? '—'}</span>
+                          )}
+                        </td>
+                        <td className="min-w-[7rem] px-3 py-2.5">
+                          {pk && l.sourceKind === 'indent' ? (
+                            <div className="relative">
+                              <Input inputMode="decimal" className="h-8 pr-10" value={pk.rate} onChange={e => set(l.sourceLineId, { rate: e.target.value })} aria-label={t('order.rate')} placeholder={t('order.rate')} data-testid={`order-rate-${k}`} />
+                              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-fg-subtle">{currency}</span>
+                            </div>
+                          ) : (
+                            <span className="tabular-nums text-fg-muted">{l.rate ? fmtRate(l.rate, currency) : '—'}</span>
+                          )}
+                        </td>
+                        <td className="min-w-[7rem] px-3 py-2.5">
+                          {pk ? (
+                            <div className="space-y-1">
                               <div className="relative">
-                                <Input inputMode="decimal" className="h-8 pr-10" value={pk.rate} onChange={e => set(l.sourceLineId, { rate: e.target.value })} aria-label={t('order.rate')} placeholder={t('order.rate')} data-testid={`order-rate-${k}`} />
-                                <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-fg-subtle">{currency}</span>
+                                <Input inputMode="decimal" className="h-8 pr-10" value={pk.qty} onChange={e => set(l.sourceLineId, { qty: e.target.value })} aria-label={t('order.qtyToOrder')} aria-invalid={!!prob && prob.includes(fmtQty(l.pendingOrder)) || undefined} data-testid={`order-qty-${k}`} />
+                                <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-fg-subtle">{l.uom}</span>
                               </div>
-                            </>
-                          ) : <span className="self-center text-sm text-fg-muted tabular-nums">{fmtRate(num(pk.qty) * num(pk.rate), currency)}</span>}
-                          {prob && <p className="col-span-full text-sm text-danger" data-testid={`order-error-${k}`}>{prob}</p>}
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+                              {prob && <p className="text-xs text-danger" data-testid={`order-error-${k}`}>{prob}</p>}
+                            </div>
+                          ) : (
+                            <span className="tabular-nums text-fg-muted">{fmtQty(l.pendingOrder)} {l.uom ?? ''}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-fg-muted">
+                          {l.requiredDate ? fmtDate(l.requiredDate) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
               {list.hasNextPage && <div className="flex justify-center border-t border-border p-2"><Button variant="ghost" onClick={() => void list.fetchNextPage()} loading={list.isFetchingNextPage}>{t('table.loadMore')}</Button></div>}
             </div>
           )}
