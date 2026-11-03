@@ -99,11 +99,11 @@ export const STORE_ISSUE_SPEC: SystemTypeSpec = {
     { key: 'location', type: 'lookup', label: 'Issue from', system: true, hidden: true, width: 3, source: { kind: 'location', activeOnly: true, withinScope: true }, display: ['code', 'name'] },
     { key: 'rate', type: 'currency', label: 'Rate', system: true, hidden: true, width: 2, min: 0 },
     { key: 'amount', type: 'formula', label: 'Amount', system: true, hidden: true, width: 2, expr: 'qty * rate', resultType: 'number', precision: 2 },
-  ] as SystemTypeSpec['lineFieldsToEnsure'],
+  ] as unknown as SystemTypeSpec['lineFieldsToEnsure'],
   /** Ensure total_amount is hidden on already-provisioned tenant header forms */
   headerFieldsToEnsure: [
     { key: 'total_amount', type: 'formula', label: 'Total amount', system: true, hidden: true, width: 4, expr: 'SUM(lines.amount)', resultType: 'number', precision: 2 },
-  ] as SystemTypeSpec['headerFieldsToEnsure'],
+  ] as unknown as SystemTypeSpec['headerFieldsToEnsure'],
   workflow: {
     granularity: 'line',
     stages: [{ key: 'approve', name: 'Issue approval', actions: ['approve', 'partial', 'reject', 'hold', 'send_back'], effects: { onApprove: [{ effect: 'post_stock', stockStatus: 'available' }] } }],

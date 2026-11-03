@@ -200,7 +200,7 @@ export function IssueLineStockBar({ itemId }: { itemId: string | undefined }) {
   const totals = stock.data?.totals;
 
   return (
-    <div className="mt-1 flex items-center gap-2 rounded border border-border bg-subtle px-2.5 py-1 text-xs" data-testid={}>
+    <div className="mt-1 flex items-center gap-2 rounded border border-border bg-subtle px-2.5 py-1 text-xs" data-testid={`issue-stock-bar-${itemId ?? "none"}`}>
       <span className="text-fg-muted">Available stock</span>
       {stock.isLoading
         ? <Skeleton className="h-3 w-12 inline-block" />
