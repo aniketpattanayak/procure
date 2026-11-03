@@ -71,7 +71,7 @@ export const STORE_ISSUE_SPEC: SystemTypeSpec = {
         // Item with category filter; autofill UOM from item master
         {
           key: 'item', type: 'lookup', label: 'Item', system: true, required: true, width: 4,
-          source: { kind: 'master', masterKey: 'item' }, display: ['code', 'name'],
+          source: { kind: 'master', masterKey: 'item' }, display: ['name'],
           filterBy: [{ field: 'item_category', targetField: 'category' }],
           autofill: [{ from: 'category', to: 'item_category', overwrite: 'if_empty' }, { from: 'uom', to: 'uom', overwrite: 'if_empty' }],
         },
@@ -92,7 +92,7 @@ export const STORE_ISSUE_SPEC: SystemTypeSpec = {
     { key: 'item_category', type: 'lookup', label: 'Category', width: 3, source: { kind: 'master', masterKey: 'item_category' }, display: ['name'] },
     {
       key: 'item', type: 'lookup', label: 'Item', system: true, required: true, width: 4,
-      source: { kind: 'master', masterKey: 'item' }, display: ['code', 'name'],
+      source: { kind: 'master', masterKey: 'item' }, display: ['name'],
       filterBy: [{ field: 'item_category', targetField: 'category' }],
       autofill: [{ from: 'category', to: 'item_category', overwrite: 'if_empty' }, { from: 'uom', to: 'uom', overwrite: 'if_empty' }],
     },
