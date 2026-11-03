@@ -102,9 +102,11 @@ export class SystemTypeInstaller {
   ): Promise<void> {
     const formRow = await this.forms.loadById(tx, tenantId, formId);
     const actor = { tenantId, userId: actorId, perms: null };
-    const curDef: FormDefinition = formRow.current_version_id
+    const rawDef = formRow.current_version_id
       ? await this.forms.version(tx, tenantId, formRow.current_version_id).then(v => v.definition as FormDefinition)
-      : { version: 1, fields: [], validations: [] };
+    : null;
+    const curDef: FormDefinition = { version: 1, fields: [], validations: [], ...(rawDef ?? {}) };
+    if (!Array.isArray(curDef.fields)) curDef.fields = [];
 
     const existingByKey = new Map(curDef.fields.map((f, i) => [f.key, { field: f, index: i }]));
     let changed = false;
