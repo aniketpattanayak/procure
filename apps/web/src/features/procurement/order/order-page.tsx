@@ -21,6 +21,7 @@ import { fmtRate, num } from '../calc';
 import { MasterPicker, type PickedOption } from '../components/master-picker';
 
 interface Pick { qty: string; vendor: PickedOption | null; rate: string }
+interface VendorHeader { deliveryDate: string; paymentTerms: PickedOption | null; remarks: string }
 
 const rowKey = (l: OrderableLine) => `${l.indentNumber ?? 'x'}-${l.sourceLineId.slice(-4)}`;
 
@@ -40,9 +41,14 @@ export function OrderPage() {
   const [saving, setSaving] = useState(false);
   const [created, setCreated] = useState<DocumentRow[] | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [headerDeliveryDate, setHeaderDeliveryDate] = useState('');
-  const [headerPaymentTerms, setHeaderPaymentTerms] = useState<PickedOption | null>(null);
-  const [headerRemarks, setHeaderRemarks] = useState('');
+  // Per-vendor header values keyed by vendorId
+  const [vendorHeaders, setVendorHeaders] = useState<Record<string, VendorHeader>>({});
+
+  const setVendorHeader = (vendorId: string, patch: Partial<VendorHeader>) =>
+    setVendorHeaders(prev => ({
+      ...prev,
+      [vendorId]: { deliveryDate: '', paymentTerms: null, remarks: '', ...prev[vendorId], ...patch },
+    }));
 
   const locations = useQuery({ queryKey: locationKeys.mine, queryFn: () => locationsApi.tree({ scope: 'mine', view: 'active' }), staleTime: 5 * 60_000, retry: false });
   const query = { vendor: vendor?.id, item: item?.id, location: location === 'all' ? undefined : location, q: dq };
@@ -97,30 +103,34 @@ export function OrderPage() {
   const create = async () => {
     setError(null);
     if (bad.length) { setError(t('order.err.fix', { n: bad.length })); return; }
-    const headerValues: Record<string, unknown> = {};
-    if (headerDeliveryDate) headerValues['expected_date'] = headerDeliveryDate;
-    if (headerPaymentTerms) headerValues['payment_terms'] = headerPaymentTerms.id;
-    if (headerRemarks) headerValues['remarks'] = headerRemarks;
-    const body: PoFromLinesBody = {
-      values: headerValues,
-      picks: chosen.map(c => ({
-        sourceLineId: c.id, qty: dec.norm(c.pk.qty),
-        ...(c.l.sourceKind === 'indent' || c.pk.vendor?.id !== c.l.vendor?.id ? { vendorId: c.pk.vendor!.id } : {}),
-        ...(c.pk.rate && c.pk.rate !== c.l.rate ? { rate: c.pk.rate } : c.l.sourceKind === 'indent' ? { rate: c.pk.rate } : {}),
-      })),
-    };
     setSaving(true);
     try {
-      const docs = await procApi.poFromLines(body);
-      setCreated(docs);
+      const allDocs: DocumentRow[] = [];
+      // Create one PO per vendor group, each with its own header values
+      for (const g of groups) {
+        const vh = vendorHeaders[g.vendor.id];
+        const values: Record<string, unknown> = {};
+        if (vh?.deliveryDate) values['expected_date'] = vh.deliveryDate;
+        if (vh?.paymentTerms) values['payment_terms'] = vh.paymentTerms.id;
+        if (vh?.remarks) values['remarks'] = vh.remarks;
+        const body: PoFromLinesBody = {
+          values,
+          picks: g.lines.map(c => ({
+            sourceLineId: c.id, qty: dec.norm(c.pk.qty),
+            ...(c.l.sourceKind === 'indent' || c.pk.vendor?.id !== c.l.vendor?.id ? { vendorId: c.pk.vendor!.id } : {}),
+            ...(c.pk.rate && c.pk.rate !== c.l.rate ? { rate: c.pk.rate } : c.l.sourceKind === 'indent' ? { rate: c.pk.rate } : {}),
+          })),
+        };
+        const docs = await procApi.poFromLines(body);
+        allDocs.push(...docs);
+      }
+      setCreated(allDocs);
       setPicks({});
+      setVendorHeaders({});
       setShowConfirm(false);
-      setHeaderDeliveryDate('');
-      setHeaderPaymentTerms(null);
-      setHeaderRemarks('');
       void qc.invalidateQueries({ queryKey: procKeys.all });
       void qc.invalidateQueries({ queryKey: docKeys.all('po') });
-      toast.success(t('order.created', { n: docs.length }));
+      toast.success(t('order.created', { n: allDocs.length }));
     } catch (e) {
       setError(isApiError(e) ? e.message : String(e));
     } finally {
@@ -286,7 +296,7 @@ export function OrderPage() {
         <DialogContent
           size="lg"
           title="Review & confirm purchase orders"
-          description="Check the details below and fill in any header fields before creating the POs."
+          description="Check the details below and fill in header fields for each vendor before creating the POs."
           footer={
             <>
               <Button variant="ghost" onClick={() => setShowConfirm(false)} disabled={saving}>Cancel</Button>
@@ -296,67 +306,71 @@ export function OrderPage() {
             </>
           }
         >
-          {/* Vendor groups summary */}
-          <div className="space-y-4">
-            {groups.map(g => (
-              <div key={g.vendor.id} className="rounded-lg border border-border">
-                <div className="flex items-center justify-between border-b border-border bg-subtle px-4 py-2">
-                  <p className="font-semibold">{g.vendor.name}</p>
-                  <p className="text-sm text-fg-muted tabular-nums">{g.lines.length} line{g.lines.length !== 1 ? 's' : ''} · {currency} {fmtRate(g.value, currency)}</p>
+          {/* Vendor groups — each with its own header fields */}
+          <div className="space-y-5">
+            {groups.map(g => {
+              const vh = vendorHeaders[g.vendor.id] ?? { deliveryDate: '', paymentTerms: null, remarks: '' };
+              const vid = g.vendor.id;
+              return (
+                <div key={vid} className="rounded-lg border border-border">
+                  {/* Vendor header bar */}
+                  <div className="flex items-center justify-between border-b border-border bg-subtle px-4 py-2">
+                    <p className="font-semibold">{g.vendor.name}</p>
+                    <p className="text-sm text-fg-muted tabular-nums">{g.lines.length} line{g.lines.length !== 1 ? 's' : ''} · {currency} {fmtRate(g.value, currency)}</p>
+                  </div>
+
+                  {/* Lines */}
+                  <ul className="divide-y divide-border">
+                    {g.lines.map(c => (
+                      <li key={c.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 px-4 py-2.5 text-sm">
+                        <span className="truncate font-medium">{c.l.item?.name ?? '—'} <span className="font-normal text-fg-muted">{c.l.item?.code}</span></span>
+                        <span className="tabular-nums text-fg-muted">{fmtQty(c.pk.qty)} {c.l.uom ?? ''}</span>
+                        <span className="tabular-nums">{fmtRate(num(c.pk.qty) * num(c.pk.rate), currency)}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {/* Per-vendor header fields */}
+                  <div className="space-y-3 border-t border-border bg-subtle/40 px-4 py-3">
+                    <p className="text-xs font-medium text-fg-muted uppercase tracking-wide">PO details for {g.vendor.name}</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label htmlFor={`del-date-${vid}`}>Expected delivery date</Label>
+                        <Input
+                          id={`del-date-${vid}`}
+                          type="date"
+                          value={vh.deliveryDate}
+                          onChange={e => setVendorHeader(vid, { deliveryDate: e.target.value })}
+                          className="h-8"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`pay-terms-${vid}`}>Payment terms</Label>
+                        <MasterPicker
+                          masterKey="payment_terms"
+                          value={vh.paymentTerms}
+                          onChange={v => setVendorHeader(vid, { paymentTerms: v })}
+                          ariaLabel="Payment terms"
+                          placeholder="Select payment terms"
+                          id={`pay-terms-${vid}`}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor={`remarks-${vid}`}>Remarks / notes</Label>
+                      <Input
+                        id={`remarks-${vid}`}
+                        type="text"
+                        placeholder="Any notes for this vendor or internal reference…"
+                        value={vh.remarks}
+                        onChange={e => setVendorHeader(vid, { remarks: e.target.value })}
+                        className="h-8"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <ul className="divide-y divide-border">
-                  {g.lines.map(c => (
-                    <li key={c.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 px-4 py-2.5 text-sm">
-                      <span className="truncate font-medium">{c.l.item?.name ?? '—'} <span className="font-normal text-fg-muted">{c.l.item?.code}</span></span>
-                      <span className="tabular-nums text-fg-muted">{fmtQty(c.pk.qty)} {c.l.uom ?? ''}</span>
-                      <span className="tabular-nums">{fmtRate(num(c.pk.qty) * num(c.pk.rate), currency)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-
-            {/* Header fields applied to all POs */}
-            <div className="space-y-3 rounded-lg border border-border p-4">
-              <p className="text-sm font-medium text-fg-muted">Header details <span className="font-normal">(applied to all POs above)</span></p>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label htmlFor="confirm-delivery-date">Expected delivery date</Label>
-                  <Input
-                    id="confirm-delivery-date"
-                    type="date"
-                    value={headerDeliveryDate}
-                    onChange={e => setHeaderDeliveryDate(e.target.value)}
-                    className="h-8"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="confirm-payment-terms">Payment terms</Label>
-                  <MasterPicker
-                    masterKey="payment_terms"
-                    value={headerPaymentTerms}
-                    onChange={setHeaderPaymentTerms}
-                    ariaLabel="Payment terms"
-                    placeholder="Select payment terms"
-                    id="confirm-payment-terms"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="confirm-remarks">Remarks / notes</Label>
-                <Input
-                  id="confirm-remarks"
-                  type="text"
-                  placeholder="Any notes for the vendor or internal reference…"
-                  value={headerRemarks}
-                  onChange={e => setHeaderRemarks(e.target.value)}
-                  className="h-8"
-                />
-              </div>
-            </div>
+              );
+            })}
 
             {error && <p className="text-sm text-danger" role="alert">{error}</p>}
           </div>
