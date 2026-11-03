@@ -89,6 +89,8 @@ export class InventoryInstaller implements OnModuleInit {
     this.installer.register({ key: 'issue_request_type', order: 700, run: (tx, ctx) => this.ensureType(tx, ctx, STORE_FEATURE, ISSUE_REQUEST_SPEC) });
     this.installer.register({ key: 'store_issue_type', order: 710, run: (tx, ctx) => this.ensureType(tx, ctx, STORE_FEATURE, STORE_ISSUE_SPEC) });
     this.installer.register({ key: 'store_return_type', order: 720, run: (tx, ctx) => this.ensureType(tx, ctx, STORE_FEATURE, STORE_RETURN_SPEC) });
+    // Must run after all type installs so their stage permission_def rows exist.
+    this.installer.register({ key: 'admin_stage_grants', order: 730, run: (tx, ctx) => this.adminStageGrants(tx, ctx) });
   }
 
   private async features(ctx: InstallContext): Promise<string[]> {
@@ -150,5 +152,35 @@ export class InventoryInstaller implements OnModuleInit {
           and not exists (select 1 from app.permission_grant x where x.tenant_id = g.tenant_id and x.perm_key = ${key}
             and x.role_id is not distinct from g.role_id and x.user_id is not distinct from g.user_id)`.execute(tx);
     }
+  }
+
+  /**
+   * Grants every `doc.<type>:action.stage_*` permission (registered by the workflow publisher) to the system
+   * administrator role (`is_system = true`). The permission compiler does NOT give `is_system` roles a blanket bypass
+   * — only users with `is_tenant_admin = true` get that. Stage keys are created lazily when workflows are first
+   * published, so a new tenant's admin role would have no grants for them.
+   *
+   * Idempotent: uses INSERT … ON CONFLICT DO NOTHING. Safe to re-run on every boot/provisioning call; the system
+   * admin role does not hold explicit grants otherwise (the UI blocks editing it), so extra allow rows are harmless
+   * and the compiler still sees them as a normal allow — which is correct for an admin role user whose user record
+   * does NOT have `is_tenant_admin = true`.
+   */
+  async adminStageGrants(tx: Tx, ctx: InstallContext): Promise<void> {
+    const adminRole = await tx.selectFrom('app.role').select('id')
+      .where('tenant_id', '=', ctx.tenantId).where('is_system', '=', true).where('is_deleted', '=', false).executeTakeFirst();
+    if (!adminRole) return;
+    // Collect every action.stage_* permission_def row that exists for this tenant (covering all document types —
+    // GRN, RTV, issue_request, store_issue, store_return — regardless of which types are installed this run).
+    await sql`
+      insert into app.permission_grant (tenant_id, role_id, user_id, perm_key, effect)
+      select pd.tenant_id, ${adminRole.id}::uuid, null, pd.key, 'allow'
+      from app.permission_def pd
+      where pd.tenant_id = ${ctx.tenantId}
+        and pd.kind = 'action'
+        and pd.key like '%:action.stage_%'
+        and not exists (
+          select 1 from app.permission_grant g
+          where g.tenant_id = pd.tenant_id and g.role_id = ${adminRole.id}::uuid and g.perm_key = pd.key
+        )`.execute(tx);
   }
 }

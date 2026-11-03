@@ -12,7 +12,7 @@ export const SettingsRegistry = {
   'security.session_days': { schema: z.number().int().min(1).max(90), default: 30, label: 'Refresh session lifetime (days)' },
   'labels.location_levels': { schema: z.array(z.string().min(1).max(40)), default: ['Location', 'Sub-location', 'Division'], label: 'Location level names' },
   'flow.indent.enabled': { schema: z.boolean(), default: true, label: 'Use indents' },
-  'flow.vendor_selection.enabled': { schema: z.boolean(), default: true, label: 'Use vendor selection' },
+  'flow.vendor_selection.enabled': { schema: z.boolean(), default: true, label: 'Require vendor selection before PO' },
   'flow.po.direct_allowed': { schema: z.boolean(), default: false, label: 'Allow PO without indent' },
   'flow.issue.without_indent': { schema: z.boolean(), default: true, label: 'Allow issue without requisition' },
   'selection.max_over_approval_pct': { schema: z.number().min(0).max(100), default: 0, label: 'Max over-approval %' },
@@ -29,17 +29,6 @@ export const SettingsRegistry = {
   'stock.allow_expired_issue': { schema: z.boolean(), default: false, label: 'Allow issuing expired batches' },
   // ---- Phase 3 fix (QA3-BUG-004): segregation of duties on escalation / forward / no-actor assignments too.
   'workflow.block_self_approval': { schema: z.boolean(), default: true, label: 'Submitters cannot approve their own documents, even when assigned by escalation' },
-  // ---- Jeevaka: indent item info panel (per-line collapsed bar + expandable drawer on new indent)
-  'procurement.indent_panel.enabled': { schema: z.boolean(), default: true, label: 'Indent item panel — show quick-info bar when an item is picked on a new indent' },
-  'procurement.indent_panel.show_stock': { schema: z.boolean(), default: true, label: 'Indent item panel — show available / open PO / pending issue stock in the bar' },
-  'procurement.indent_panel.show_last_indent': { schema: z.boolean(), default: true, label: 'Indent item panel — show most recent indent number + date in the collapsed bar' },
-  'procurement.indent_panel.show_last_po': { schema: z.boolean(), default: true, label: 'Indent item panel — show most recent PO number + date in the collapsed bar' },
-  'procurement.indent_panel.show_indent_list': { schema: z.boolean(), default: true, label: 'Indent item panel — show recent indents list in the expanded drawer' },
-  'procurement.indent_panel.show_po_list': { schema: z.boolean(), default: true, label: 'Indent item panel — show recent POs list in the expanded drawer' },
-  'procurement.indent_panel.show_last_rate': { schema: z.boolean(), default: false, label: 'Indent item panel — show last purchase rate (from most recent approved PO)' },
-  'procurement.indent_panel.indent_count': { schema: z.number().int().min(3).max(10), default: 5, label: 'Indent item panel — number of recent indents to show in the expanded drawer' },
-  'procurement.indent_panel.po_count': { schema: z.number().int().min(3).max(10), default: 5, label: 'Indent item panel — number of recent POs to show in the expanded drawer' },
-  'procurement.indent_panel.location_filter': { schema: z.boolean(), default: true, label: 'Indent item panel — filter stock by selected location (when unchecked: always show all-location total)' },
 } as const;
 
 export type SettingKey = keyof typeof SettingsRegistry;

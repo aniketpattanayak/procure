@@ -44,7 +44,7 @@ export const PO_SPEC: SystemTypeSpec = {
           display: ['code', 'name'], autofill: [{ from: 'payment_terms', to: 'payment_terms', overwrite: 'if_empty' }],
         },
         { key: 'currency', type: 'text', label: 'Currency', maxLength: 3, width: 2, help: 'Defaults to the vendor currency, else the company currency' },
-        { key: 'payment_terms', type: 'lookup', label: 'Payment terms', width: 4, source: { kind: 'master', masterKey: 'payment_terms' }, display: ['code', 'name'] },
+        { key: 'payment_terms', type: 'lookup', label: 'Payment terms', width: 4, source: { kind: 'master', masterKey: 'payment_terms' }, display: ['code', 'name'], allowCustom: true },
         { key: 'terms', type: 'multilookup', label: 'Terms & conditions', width: 12, source: { kind: 'master', masterKey: 'terms' }, display: ['code', 'name'] },
         { key: 'expected_date', type: 'date', label: 'Expected delivery', width: 3, readOnly: true, help: 'Earliest open schedule date, unless a follow-up revised it' },
         money('freight', 'Freight'),
@@ -65,7 +65,7 @@ export const PO_SPEC: SystemTypeSpec = {
         { key: 'item_category', type: 'lookup', label: 'Category', width: 3, source: { kind: 'master', masterKey: 'item_category' }, display: ['name'] },
         {
           key: 'item', type: 'lookup', label: 'Item', system: true, required: true, width: 4, source: { kind: 'master', masterKey: 'item' }, display: ['code', 'name'],
-          autofill: [{ from: 'category', to: 'item_category', overwrite: 'if_empty' }, { from: 'uom', to: 'uom', overwrite: 'if_empty' }, { from: 'tax_code', to: 'tax_code', overwrite: 'if_empty' }],
+          autofill: [{ from: 'uom', to: 'uom', overwrite: 'if_empty' }, { from: 'tax_code', to: 'tax_code', overwrite: 'if_empty' }],
           filterBy: [{ field: 'item_category', targetField: 'category' }],
         },
         { key: 'rate', type: 'currency', label: 'Rate', system: true, required: true, min: 0, width: 2 },
@@ -94,7 +94,7 @@ export const PO_SPEC: SystemTypeSpec = {
     { key: 'item_category', type: 'lookup', label: 'Category', width: 3, source: { kind: 'master', masterKey: 'item_category' }, display: ['name'] },
     {
       key: 'item', type: 'lookup', label: 'Item', system: true, required: true, width: 4, source: { kind: 'master', masterKey: 'item' }, display: ['code', 'name'],
-      autofill: [{ from: 'category', to: 'item_category', overwrite: 'if_empty' }, { from: 'uom', to: 'uom', overwrite: 'if_empty' }, { from: 'tax_code', to: 'tax_code', overwrite: 'if_empty' }],
+      autofill: [{ from: 'uom', to: 'uom', overwrite: 'if_empty' }, { from: 'tax_code', to: 'tax_code', overwrite: 'if_empty' }],
       filterBy: [{ field: 'item_category', targetField: 'category' }],
     },
   ] as SystemTypeSpec['lineFieldsToEnsure'],

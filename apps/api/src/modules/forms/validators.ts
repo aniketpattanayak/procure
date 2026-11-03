@@ -247,7 +247,16 @@ export function validateValue(field: ValueField, raw: unknown, path: string, opt
     case 'checkbox':
     case 'toggle':
       return typeof raw === 'boolean' ? { value: raw, errors } : fail(`${label} must be true or false.`);
-    case 'lookup':
+    case 'lookup': {
+      // When allowCustom is set, accept either a UUID (master record) or a non-empty string (custom value).
+      const allowCustom = (f.allowCustom as boolean | undefined) === true;
+      if (allowCustom) {
+        if (typeof raw !== 'string' || !raw.trim()) return fail(`${label} must be a value.`);
+        // Store UUIDs lower-cased, custom strings as-is (trimmed).
+        return isUuidString(raw) ? { value: raw.toLowerCase(), errors } : { value: (raw as string).trim(), errors };
+      }
+      return isUuidString(raw) ? { value: raw.toLowerCase(), errors } : fail(`${label} has an invalid reference.`);
+    }
     case 'file':
     case 'image':
     case 'signature':

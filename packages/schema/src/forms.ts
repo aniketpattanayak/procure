@@ -119,6 +119,11 @@ const lookupCfg = {
   filterBy: z.array(LookupFilter).max(5).default([]),
   autofill: z.array(LookupAutofill).max(20).default([]),
   /** Show inactive targets (only for viewing old records; new selections always exclude inactive). */
+  /**
+   * When true, the field accepts a free-text value in addition to master records.
+   * Custom values are stored as plain strings (not UUIDs) and do NOT create new master records.
+   */
+  allowCustom: z.boolean().default(false),
 };
 const LookupF = z.object({ ...base, type: z.literal('lookup'), ...lookupCfg });
 const MultiLookupF = z.object({ ...base, type: z.literal('multilookup'), ...lookupCfg, maxSelected: z.number().int().min(1).optional() });

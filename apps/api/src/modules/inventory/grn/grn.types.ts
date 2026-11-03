@@ -59,6 +59,7 @@ export const GRN_SPEC: SystemTypeSpec = {
         { key: GRN_LINE.accepted, type: 'decimal', label: 'Accepted qty', precision: 3, min: 0, width: 2, readOnly: true },
         { key: GRN_LINE.rejected, type: 'decimal', label: 'Rejected qty', precision: 3, min: 0, width: 2, readOnly: true },
         text(GRN_LINE.rejectReason, 'Reject reason', 4, { maxLength: 500 }),
+        { key: 'rejection_evidence', type: 'files', label: 'Rejection Evidence', maxFiles: 10, visibleWhen: 'rejected_qty > 0' },
         text(GRN_LINE.batchNo, 'Batch no.', 2, { maxLength: 60 }),
         { key: GRN_LINE.mfgDate, type: 'date', label: 'Mfg. date', width: 2 },
         { key: GRN_LINE.expiryDate, type: 'date', label: 'Expiry date', width: 2 },
@@ -76,21 +77,6 @@ export const GRN_SPEC: SystemTypeSpec = {
     stages: [
       { key: 'gate', name: 'Gate entry check', actions: ['approve', 'partial', 'reject', 'hold', 'send_back'] },
       { key: 'store', name: 'Store verification', actions: ['approve', 'partial', 'reject', 'hold', 'send_back'], effects: { onApprove: [{ effect: 'post_stock', stockStatus: 'available' }] } },
-      {
-        // HOD reviews after store verification — rejection puts entire GRN on hold; stock remains posted but blocked
-        key: 'hod_approval', name: 'HOD Approval', actions: ['approve', 'reject'],
-        effects: { onReject: [{ effect: 'block_stock' }] },
-      },
-      {
-        // Second sequential approver after HOD — role to be assigned by tenant admin
-        key: 'approver2', name: 'Approver 2', actions: ['approve', 'reject'],
-        effects: { onReject: [{ effect: 'block_stock' }] },
-      },
-      {
-        // Third sequential approver — role to be assigned by tenant admin
-        key: 'approver3', name: 'Approver 3', actions: ['approve', 'reject'],
-        effects: { onReject: [{ effect: 'block_stock' }] },
-      },
       {
         key: 'quality', name: 'Quality check', when: QC_CONDITION, actions: ['approve', 'partial', 'reject', 'hold'],
         effects: { onReject: [{ effect: 'block_stock' }, { effect: 'route_to', stage: 'disposition' }] },
