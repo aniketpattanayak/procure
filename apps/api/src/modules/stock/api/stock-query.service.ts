@@ -65,27 +65,46 @@ export class StockQueryService {
     if (q.status && !held.includes(q.status)) throw AppError.forbidden();
     if (!held.length) return { data: [], nextCursor: null };
     if (q.node) await this.nodeInScope(tx, a, q.node);
-    const byBatch = q.byBatch || q.expiringWithinDays !== undefined;
+    const byBatch = (q.byBatch || q.expiringWithinDays !== undefined) && !q.combine;
+    const combine = q.combine && !byBatch;
     const offset = readOffset(q.cursor);
     const showValue = canSeeValue(a);
     const s = (st: StockStatus) => (held.includes(st) ? sql`coalesce(sum(b.qty) filter (where b.stock_status = ${st}), 0)` : sql`0`);
     const T = a.tenantId;
     const like = q.q ? `%${q.q.replace(/[\\%_]/g, m => `\\${m}`)}%` : null;
-    // QA5-BUG-006: group the balance rows, page, and only then decorate the page (UoM, path names, avg cost, re-order
-    // rule). The UoM is joined by uuid (the old `u.id::text = i.data->>'uom'` join ran a master_record scan per
-    // grouped row under RLS). belowMin is resolved from the (few) active rules first, not per balance row.
+    // QA5-BUG-006: group the balance rows, page, and only then decorate the page. When combine=true we group by
+    // item only (sum across all locations). We left-join from master_record so items never received still appear.
     const rows = await sql<{
-      item_id: string; node_id: string; bk: string; available: string; quarantine: string; rejected: string; value: string;
-      item_code: string; item_name: string; uom: string | null; node_code: string; node_name: string; node_names: string[];
+      item_id: string; node_id: string | null; bk: string; available: string; quarantine: string; rejected: string; value: string;
+      item_code: string; item_name: string; uom: string | null; node_code: string | null; node_name: string | null; node_names: string[] | null;
       batch_no: string | null; expiry_date: string | null; avg_cost: string | null; min_qty: string | null; reorder_qty: string | null; subtree_available: string | null;
     }>`
-      with ${q.belowMin ? sql`below as materialized (
+      with ${q.belowMin && !combine ? sql`below as materialized (
         select r.item_id, r.node_id from app.reorder_rule r join app.location_node rn on rn.id = r.node_id
          where r.tenant_id = ${T} and r.is_active
            and (select coalesce(sum(x.qty), 0) from app.stock_balance x join app.location_node xn on xn.id = x.node_id
                  where x.tenant_id = ${T} and x.item_id = r.item_id and x.stock_status = 'available' and xn.path <@ rn.path) < r.min_qty
       ),` : sql``}
       bal as materialized (
+        ${combine ? sql`
+        -- Combined mode: one row per item across all permitted locations, left-joined from master
+        select i.id as item_id, null::uuid as node_id, ${NO_BATCH}::uuid as bk,
+               coalesce(${s('available')}, 0) as available,
+               coalesce(${s('quarantine')}, 0) as quarantine,
+               coalesce(${s('rejected')}, 0) as rejected,
+               coalesce(sum(b.value) filter (where b.stock_status = any(${sql.val(held)}::text[])), 0) as value
+          from app.master_record i
+          left join app.stock_balance b on b.tenant_id = ${T} and b.item_id = i.id
+          left join app.location_node n on n.id = b.node_id
+              and ${this.nodeFilter(q.node, q.includeChildren, 'n.path')}
+              and ${this.scopeSql(a, 'n.path')}
+         where i.tenant_id = ${T} and i.def_id in (select id from app.master_def where tenant_id = ${T} and key = 'item')
+           and (i.data->>'is_active')::boolean is not false
+           ${q.item ? sql`and i.id = ${q.item}` : sql``}
+           ${like ? sql`and (i.code::text ilike ${like} or i.name ilike ${like})` : sql``}
+         group by i.id
+        ` : sql`
+        -- Per-location mode: only locations that have ever had stock movement, left-join ensures zero-bal rows appear
         select b.item_id, b.node_id, ${byBatch ? sql`b.batch_key` : sql`${NO_BATCH}::uuid`} as bk,
                ${s('available')} as available, ${s('quarantine')} as quarantine, ${s('rejected')} as rejected,
                coalesce(sum(b.value) filter (where b.stock_status = any(${sql.val(held)}::text[])), 0) as value
@@ -100,39 +119,42 @@ export class StockQueryService {
            ${q.belowMin ? sql`and (b.item_id, b.node_id) in (select item_id, node_id from below)` : sql``}
          group by 1, 2, 3
         having coalesce(sum(abs(b.qty)) filter (where b.stock_status = any(${sql.val(held)}::text[])), 0) <> 0
-            ${q.status ? sql`and coalesce(sum(b.qty) filter (where b.stock_status = ${q.status}), 0) <> 0` : sql``}
+        `}
       ),
       page as materialized (
         select bal.*, i.code as code_ord, i.code::text as item_code, i.name as item_name, i.data->>'uom' as uom_ref,
-               n.code::text as node_code, n.name as node_name, n.path, sb.batch_no, sb.expiry_date
+               ${combine ? sql`null::text as node_code, null::text as node_name, null as path` : sql`n.code::text as node_code, n.name as node_name, n.path`},
+               ${byBatch ? sql`sb.batch_no, sb.expiry_date` : sql`null::text as batch_no, null::date as expiry_date`}
           from bal
           join app.master_record i on i.id = bal.item_id
-          join app.location_node n on n.id = bal.node_id
-          left join app.stock_batch sb on sb.id = bal.bk
+          ${combine ? sql`` : sql`join app.location_node n on n.id = bal.node_id`}
+          ${byBatch ? sql`left join app.stock_batch sb on sb.id = bal.bk` : sql``}
          where true
-           ${q.expiringWithinDays !== undefined ? sql`and sb.expiry_date is not null and sb.expiry_date <= current_date + ${q.expiringWithinDays}::int` : sql``}
-         order by i.code, n.path, sb.batch_no nulls first, bal.bk
+           ${q.expiringWithinDays !== undefined && !combine ? sql`and sb.expiry_date is not null and sb.expiry_date <= current_date + ${q.expiringWithinDays}::int` : sql``}
+         order by i.code ${combine ? sql`` : sql`, n.path`} ${byBatch ? sql`, sb.batch_no nulls first, bal.bk` : sql``}
          limit ${q.limit + 1} offset ${offset}
       )
-      select p.item_id, p.node_id, p.bk::text as bk, p.available::text as available, p.quarantine::text as quarantine, p.rejected::text as rejected,
+      select p.item_id, p.node_id::text as node_id, p.bk::text as bk,
+             p.available::text as available, p.quarantine::text as quarantine, p.rejected::text as rejected,
              p.value::text as value, p.item_code, p.item_name, u.code::text as uom, p.node_code, p.node_name,
-             (select array_agg(x.name order by x.depth) from app.location_node x where x.tenant_id = ${T} and x.path @> p.path) as node_names,
-             p.batch_no, p.expiry_date::text as expiry_date, ac.avg_cost::text as avg_cost,
-             r.min_qty::text as min_qty, r.reorder_qty::text as reorder_qty,
+             ${combine ? sql`null::text[] as node_names` : sql`(select array_agg(x.name order by x.depth) from app.location_node x where x.tenant_id = ${T} and x.path @> p.path) as node_names`},
+             p.batch_no, p.expiry_date::text as expiry_date,
+             ${combine ? sql`null::text as avg_cost` : sql`ac.avg_cost::text as avg_cost`},
+             ${combine ? sql`null::text as min_qty, null::text as reorder_qty, null::text as subtree_available` : sql`r.min_qty::text as min_qty, r.reorder_qty::text as reorder_qty,
              case when r.id is null then null else (select coalesce(sum(x.qty), 0) from app.stock_balance x join app.location_node xn on xn.id = x.node_id
-                where x.tenant_id = ${T} and x.item_id = p.item_id and x.stock_status = 'available' and xn.path <@ p.path)::text end as subtree_available
+                where x.tenant_id = ${T} and x.item_id = p.item_id and x.stock_status = 'available' and xn.path <@ p.path)::text end as subtree_available`}
         from page p
         left join app.master_record u on u.tenant_id = ${T}
              and u.id = case when p.uom_ref ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then p.uom_ref::uuid end
-        left join app.item_avg_cost ac on ac.tenant_id = ${T} and ac.item_id = p.item_id and ac.node_id = p.node_id
-        left join app.reorder_rule r on r.tenant_id = ${T} and r.item_id = p.item_id and r.node_id = p.node_id and r.is_active
-       order by p.code_ord, p.path, p.batch_no nulls first, p.bk`.execute(tx);
+        ${combine ? sql`` : sql`left join app.item_avg_cost ac on ac.tenant_id = ${T} and ac.item_id = p.item_id and ac.node_id = p.node_id
+        left join app.reorder_rule r on r.tenant_id = ${T} and r.item_id = p.item_id and r.node_id = p.node_id and r.is_active`}
+       order by p.code_ord ${combine ? sql`` : sql`, p.path`} ${byBatch ? sql`, p.batch_no nulls first, p.bk` : sql``}`.execute(tx);
     const more = rows.rows.length > q.limit;
     const data = rows.rows.slice(0, q.limit).map((r): StockBalanceRow => {
       const total = dec(r.available).plus(dec(r.quarantine)).plus(dec(r.rejected));
       return {
         item: { id: r.item_id, code: r.item_code, name: r.item_name, uom: r.uom },
-        node: { id: r.node_id, code: r.node_code, name: r.node_name, path: r.node_names ?? [r.node_name] },
+        node: r.node_id ? { id: r.node_id, code: r.node_code ?? '', name: r.node_name ?? '', path: r.node_names ?? [r.node_name ?? ''] } : null,
         batch: r.bk !== NO_BATCH && r.batch_no !== null ? { id: r.bk, batchNo: r.batch_no, expiryDate: r.expiry_date } : null,
         available: nz(r.available), quarantine: nz(r.quarantine), rejected: nz(r.rejected), total: q4(total),
         value: showValue ? nz(r.value) : null,

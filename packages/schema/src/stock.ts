@@ -27,7 +27,7 @@ export interface StockPost {
 }
 
 export interface StockBalanceRow {
-  item: { id: string; code: string; name: string; uom: string | null }; node: { id: string; code: string; name: string; path: string[] };
+  item: { id: string; code: string; name: string; uom: string | null }; node: { id: string; code: string; name: string; path: string[] } | null;
   batch: { id: string; batchNo: string; expiryDate: string | null } | null;
   available: string; quarantine: string; rejected: string; total: string;
   value: string | null;            // null when the viewer lacks stock:action.view_value
@@ -38,6 +38,7 @@ export const StockQuery = z.object({
   node: Uuid.optional(), includeChildren: QBool.default(true), item: Uuid.optional(), q: z.string().max(100).optional(),
   status: StockStatus.optional(), byBatch: QBool.default(false), belowMin: QBool.default(false),
   expiringWithinDays: z.coerce.number().int().min(0).max(3650).optional(),
+  combine: QBool.default(false),
   cursor: z.string().optional(), limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 

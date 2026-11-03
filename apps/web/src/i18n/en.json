@@ -3240,6 +3240,7 @@
   "stock.status.quarantine": "Quarantine",
   "stock.status.rejected": "Rejected",
   "stock.byBatch": "By batch",
+  "stock.combineLocations": "Combine locations",
   "stock.belowMinOnly": "Below minimum",
   "stock.belowMin": "Below min",
   "stock.minQty": "Min {qty}",

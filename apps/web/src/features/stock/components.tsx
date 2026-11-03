@@ -84,7 +84,7 @@ export function BatchPicker({ itemId, nodeId, qty, value, onChange, label, testI
     queryFn: () => stockApi.balances({ item: itemId, node: nodeId, includeChildren: false, byBatch: true, status: 'available' }, null, 200),
     enabled: canView, staleTime: 30_000, retry: false,
   });
-  const rows = (q.data?.data ?? []).filter(r => r.node.id === nodeId && dec.gt0(r.available))
+  const rows = (q.data?.data ?? []).filter(r => r.node?.id === nodeId && dec.gt0(r.available))
     .sort((a, b) => (a.batch?.expiryDate ?? '9999').localeCompare(b.batch?.expiryDate ?? '9999'));
   useEffect(() => {
     if (value !== undefined || !q.data) return;
