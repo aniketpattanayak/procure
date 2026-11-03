@@ -30,6 +30,13 @@ export interface SystemTypeSpec {
    * already-provisioned tenants without wiping their customisations.
    */
   lineFieldsToEnsure?: FormDefinition['fields'];
+  /**
+   * When set, after the type is found/created, publish a new version of the header form that
+   * ensures these fields are present and up-to-date (by key). Existing fields not in this list
+   * are left as-is. Use this to update header field properties (e.g. hidden: true) in
+   * already-provisioned tenants without wiping their customisations.
+   */
+  headerFieldsToEnsure?: FormDefinition['fields'];
 }
 
 /**
@@ -66,7 +73,12 @@ export class SystemTypeInstaller {
 
     // Ensure line form fields are up-to-date for existing types (e.g. after installer adds new fields).
     if (!created && t.line_form_id && spec.lineFieldsToEnsure?.length) {
-      await this.ensureLineFields(tx, tenantId, actorId, t.line_form_id, spec.lineFieldsToEnsure);
+      await this.ensureFormFields(tx, tenantId, actorId, t.line_form_id, spec.lineFieldsToEnsure);
+    }
+
+    // Ensure header form fields are up-to-date for existing types (e.g. after installer hides a field).
+    if (!created && t.header_form_id && spec.headerFieldsToEnsure?.length) {
+      await this.ensureFormFields(tx, tenantId, actorId, t.header_form_id, spec.headerFieldsToEnsure);
     }
 
     const dt = { id: t.id, key: t.key, name: t.name, header_form_id: t.header_form_id, line_form_id: t.line_form_id };
@@ -78,17 +90,17 @@ export class SystemTypeInstaller {
   }
 
   /**
-   * Merge installer-defined fields into an existing line form version.
+   * Merge installer-defined fields into an existing form version (header or line).
    * - Fields already present (by key) are updated in-place (preserving position) with the new definition.
    * - Fields not yet present are inserted before the first non-system custom field so they appear near the start.
    * - Fields not in `wantedFields` are left untouched.
    * Publishes a new version only when something actually changed.
    */
-  private async ensureLineFields(
+  private async ensureFormFields(
     tx: Tx, tenantId: string, actorId: string | null,
-    lineFormId: string, wantedFields: FormDefinition['fields'],
+    formId: string, wantedFields: FormDefinition['fields'],
   ): Promise<void> {
-    const formRow = await this.forms.loadById(tx, tenantId, lineFormId);
+    const formRow = await this.forms.loadById(tx, tenantId, formId);
     const actor = { tenantId, userId: actorId, perms: null };
     const curDef: FormDefinition = formRow.current_version_id
       ? await this.forms.version(tx, tenantId, formRow.current_version_id).then(v => v.definition as FormDefinition)
@@ -101,7 +113,7 @@ export class SystemTypeInstaller {
     for (const wanted of wantedFields) {
       const existing = existingByKey.get(wanted.key);
       if (existing) {
-        // Update the existing field definition (e.g. add filterBy to item).
+        // Update the existing field definition (e.g. add filterBy to item, or set hidden: true).
         const cur = JSON.stringify(existing.field);
         const next = JSON.stringify(wanted);
         if (cur !== next) {

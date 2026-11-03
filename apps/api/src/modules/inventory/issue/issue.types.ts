@@ -60,11 +60,26 @@ export const STORE_ISSUE_SPEC: SystemTypeSpec = {
         department,
         text('issued_to', 'Issued to', 4),
         hiddenRef('request', 'Issue request'),
+        // Hide total_amount from header — store issue is quantity-only, no monetary value shown
+        { key: 'total_amount', type: 'formula', label: 'Total amount', system: true, hidden: true, width: 4, expr: 'SUM(lines.amount)', resultType: 'number', precision: 2 },
       ],
     },
     lineDefinition: {
       fields: [
-        { key: 'location', type: 'lookup', label: 'Issue from', system: true, width: 3, source: { kind: 'location', activeOnly: true, withinScope: true }, display: ['code', 'name'] },
+        // Category picker — filters the Item lookup below
+        { key: 'item_category', type: 'lookup', label: 'Category', width: 3, source: { kind: 'master', masterKey: 'item_category' }, display: ['name'] },
+        // Item with category filter; autofill UOM from item master
+        {
+          key: 'item', type: 'lookup', label: 'Item', system: true, required: true, width: 4,
+          source: { kind: 'master', masterKey: 'item' }, display: ['code', 'name'],
+          filterBy: [{ field: 'item_category', targetField: 'category' }],
+          autofill: [{ from: 'category', to: 'item_category', overwrite: 'if_empty' }, { from: 'uom', to: 'uom', overwrite: 'if_empty' }],
+        },
+        // Hide Issue from (location) — defaults to document location; no need for per-line override
+        { key: 'location', type: 'lookup', label: 'Issue from', system: true, hidden: true, width: 3, source: { kind: 'location', activeOnly: true, withinScope: true }, display: ['code', 'name'] },
+        // Hide Rate and Amount — store issue is quantity-only
+        { key: 'rate', type: 'currency', label: 'Rate', system: true, hidden: true, width: 2, min: 0 },
+        { key: 'amount', type: 'formula', label: 'Amount', system: true, hidden: true, width: 2, expr: 'qty * rate', resultType: 'number', precision: 2 },
         text(ISSUE_LINE.batchNo, 'Batch no.', 2, { maxLength: 60 }),
         text('purpose', 'Purpose', 4, { maxLength: 500 }),
         hiddenRef(ISSUE_LINE.requestLine, 'Request line'),
@@ -72,6 +87,23 @@ export const STORE_ISSUE_SPEC: SystemTypeSpec = {
     },
   } as SystemTypeSpec['create'],
   extraKeys: [],
+  /** Ensure category + updated item (filterBy) + hidden fields are present in already-provisioned tenants. */
+  lineFieldsToEnsure: [
+    { key: 'item_category', type: 'lookup', label: 'Category', width: 3, source: { kind: 'master', masterKey: 'item_category' }, display: ['name'] },
+    {
+      key: 'item', type: 'lookup', label: 'Item', system: true, required: true, width: 4,
+      source: { kind: 'master', masterKey: 'item' }, display: ['code', 'name'],
+      filterBy: [{ field: 'item_category', targetField: 'category' }],
+      autofill: [{ from: 'category', to: 'item_category', overwrite: 'if_empty' }, { from: 'uom', to: 'uom', overwrite: 'if_empty' }],
+    },
+    { key: 'location', type: 'lookup', label: 'Issue from', system: true, hidden: true, width: 3, source: { kind: 'location', activeOnly: true, withinScope: true }, display: ['code', 'name'] },
+    { key: 'rate', type: 'currency', label: 'Rate', system: true, hidden: true, width: 2, min: 0 },
+    { key: 'amount', type: 'formula', label: 'Amount', system: true, hidden: true, width: 2, expr: 'qty * rate', resultType: 'number', precision: 2 },
+  ] as SystemTypeSpec['lineFieldsToEnsure'],
+  /** Ensure total_amount is hidden on already-provisioned tenant header forms */
+  headerFieldsToEnsure: [
+    { key: 'total_amount', type: 'formula', label: 'Total amount', system: true, hidden: true, width: 4, expr: 'SUM(lines.amount)', resultType: 'number', precision: 2 },
+  ] as SystemTypeSpec['headerFieldsToEnsure'],
   workflow: {
     granularity: 'line',
     stages: [{ key: 'approve', name: 'Issue approval', actions: ['approve', 'partial', 'reject', 'hold', 'send_back'], effects: { onApprove: [{ effect: 'post_stock', stockStatus: 'available' }] } }],
