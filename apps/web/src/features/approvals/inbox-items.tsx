@@ -15,10 +15,6 @@ import { ConfirmDecisionDialog, type ConfirmRow, type DecisionKind } from './con
 
 interface ItemRow { key: string; i: InboxItem; doc: DocumentRow; line: DocumentLineRow; pending: string }
 
-/**
- * Approvals page, "All items" view: every pending line of the listed documents in one table. Type a qty (or tick a
- * row to fill its whole pending qty), then Approve / Hold / Reject; a popup shows the overview before anything saves.
- */
 export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
   const qc = useQueryClient();
   const details = useQueries({
@@ -40,7 +36,7 @@ export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
   }, [rows, details]);
 
   const [qtys, setQtys] = useState<Record<string, string>>({});
-  const [reason, setReason] = useState('');
+  const [reasons, setReasons] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<{ kind: DecisionKind; picked: ItemRow[]; rows: ConfirmRow[] } | null>(null);
 
@@ -63,11 +59,11 @@ export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
       if (!isDecimal(v) || !dec.gt0(v)) { toast.error(t('approve.badQtyDoc', { line: ln })); return; }
       const canExceed = kind === 'approve' && r.i.docTypeKey === 'indent';
       if (!canExceed && dec.cmp(v, r.pending) > 0) { toast.error(t('approve.overPendingDoc', { line: ln, pending: fmtQty(r.pending) })); return; }
-    }
-    if (kind !== 'approve' && reason.trim().length < 3) {
-      toast.error(t('approve.reasonNeeded'));
-      document.querySelector<HTMLInputElement>('[data-testid="inbox-items-reason"]')?.focus();
-      return;
+      if (kind !== 'approve' && (reasons[r.key] ?? '').trim().length < 3) {
+        toast.error(t('approve.reasonNeeded'));
+        document.querySelector<HTMLInputElement>(`[data-testid="inbox-item-reason-${r.key}"]`)?.focus();
+        return;
+      }
     }
     setConfirm({
       kind, picked,
@@ -75,7 +71,6 @@ export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
     });
   };
 
-  /** One decide call per document and stage; the overview already showed exactly what is sent. */
   const send = useCallback(async () => {
     if (!confirm) return;
     setBusy(true);
@@ -84,14 +79,14 @@ export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
       const k = `${r.i.docTypeKey}|${r.i.documentId}|${r.i.stageKey}`;
       groups.set(k, [...(groups.get(k) ?? []), r]);
     }
-    const r0 = reason.trim();
     let okLines = 0;
     const failed: string[] = [];
     for (const g of groups.values()) {
       const { i, doc } = g[0]!;
       const decisions = g.map(r => {
         const v = dec.norm(qtys[r.key]!.trim());
-        return { lineId: r.line.id, approve: confirm.kind === 'approve' ? v : '0', hold: confirm.kind === 'hold' ? v : '0', reject: confirm.kind === 'reject' ? v : '0', ...(r0 ? { reason: r0 } : {}) };
+        const rowReason = (reasons[r.key] ?? '').trim();
+        return { lineId: r.line.id, approve: confirm.kind === 'approve' ? v : '0', hold: confirm.kind === 'hold' ? v : '0', reject: confirm.kind === 'reject' ? v : '0', ...(rowReason ? { reason: rowReason } : {}) };
       });
       try {
         await docsApi.act(i.docTypeKey, i.documentId, { action: 'decide', stageKey: i.stageKey, decisions }, { version: doc.version, idempotencyKey: newIdempotencyKey() });
@@ -108,10 +103,10 @@ export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
     setConfirm(null);
     if (okLines) {
       toast.success(t(kind === 'approve' ? 'approve.didApprove' : kind === 'hold' ? 'approve.didHold' : 'approve.didReject', { n: okLines }));
-      setQtys({}); setReason('');
+      setQtys({}); setReasons({});
     }
     if (failed.length) toast.error(t('approve.someFailed', { n: failed.length }), failed.join('\n'));
-  }, [confirm, qtys, reason, qc]);
+  }, [confirm, qtys, reasons, qc]);
 
   if (loading && !items.length) {
     return <div className="space-y-2 p-4" aria-busy="true">{[0, 1, 2, 3].map(k => <Skeleton key={k} className="h-9 w-full" />)}</div>;
@@ -125,7 +120,6 @@ export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
         <Button size="sm" variant="secondary" className="border-success/50 font-semibold text-success" disabled={busy} onClick={() => prepare('approve')} data-testid="inbox-items-approve">{t('approve.approve')}</Button>
         <Button size="sm" variant="secondary" className="border-warning/50 font-semibold text-warning" disabled={busy} onClick={() => prepare('hold')} data-testid="inbox-items-hold">{t('approve.hold')}</Button>
         <Button size="sm" variant="danger-outline" className="font-semibold" disabled={busy} onClick={() => prepare('reject')} data-testid="inbox-items-reject">{t('approve.reject')}</Button>
-        <Input value={reason} onChange={e => setReason(e.target.value)} placeholder={t('approve.reasonPlaceholder')} aria-label={t('approve.reasonPlaceholder')} className="h-8 w-full sm:w-64" data-testid="inbox-items-reason" />
         <span className="ml-auto text-sm text-fg-muted tabular-nums">{t('inbox.items.count', { n: items.length })}</span>
       </div>
       <div className="overflow-x-auto">
@@ -151,6 +145,7 @@ export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
               const over = on && !bad && dec.cmp(v.trim(), r.pending) > 0;
               const uom = lineUom(r.line);
               const rowCls = on ? 'bg-accent-soft/40' : '';
+              const rowReason = reasons[r.key] ?? '';
               return (
                 <Fragment key={r.key}>
                 <tr className={cn('border-b-0', rowCls)} data-testid={`inbox-item-${r.i.number ?? r.i.documentId}-${r.line.lineNo}`}>
@@ -173,7 +168,21 @@ export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
                     </p>}
                   </td>
                 </tr>
-                {/* Item context below each row: last indents / POs / inventory, and the line's approval history */}
+                {on && (
+                  <tr className={rowCls}>
+                    <td />
+                    <td colSpan={6} className="px-3 pb-2 pt-0">
+                      <Input
+                        value={rowReason}
+                        onChange={e => setReasons(rs => ({ ...rs, [r.key]: e.target.value }))}
+                        placeholder={t('approve.reasonPlaceholder')}
+                        aria-label={t('approve.reasonPlaceholder')}
+                        className="h-8 w-full sm:w-80"
+                        data-testid={`inbox-item-reason-${r.key}`}
+                      />
+                    </td>
+                  </tr>
+                )}
                 <tr className={rowCls} data-testid={`inbox-item-details-${r.i.number ?? r.i.documentId}-${r.line.lineNo}`}>
                   <td />
                   <td colSpan={6} className="px-3 pb-3 pt-0">
@@ -188,7 +197,7 @@ export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
         </table>
       </div>
       {confirm && (
-        <ConfirmDecisionDialog kind={confirm.kind} rows={confirm.rows} reason={reason.trim()} busy={busy}
+        <ConfirmDecisionDialog kind={confirm.kind} rows={confirm.rows} reason={''} busy={busy}
           onCancel={() => setConfirm(null)} onConfirm={() => void send()} />
       )}
     </div>
