@@ -277,13 +277,7 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
 
         {conflict && <InlineAlert tone="warning" className="mb-4" data-testid="approve-conflict">{conflict}</InlineAlert>}
 
-        <Tabs value={tab} onValueChange={v => setTab(v as 'items' | 'history')} className="w-full">
-          <TabsList className="mb-3" data-testid="approve-tabs">
-            <TabsTrigger value="items" data-testid="approve-tab-items">{t('approve.tab.items')}</TabsTrigger>
-            <TabsTrigger value="history" data-testid="approve-tab-history">{t('approve.tab.history')}</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="items">
+        <div className="w-full">
             {/* Item Wise / Doc Wise toggle — always visible above the decision area */}
             <div className="mb-3 flex overflow-hidden rounded border border-border w-fit" role="group" aria-label="Granularity">
               <button type="button"
@@ -368,7 +362,6 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
             )}
         </div>
       </div>
-    </div>
 
       {granularity === 'line' && drafts.length > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-bg/95 backdrop-blur lg:left-[var(--sidebar-w)]" data-testid="decision-summary-bar">
