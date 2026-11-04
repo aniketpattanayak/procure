@@ -166,7 +166,7 @@ function InboxHistoryTabContent({ rows }: { rows: InboxItem[] }) {
   }
   allEntries.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
   if (queries.some(q => q.isLoading)) {
-    return <div className="flex justify-center py-8 text-sm text-fg-muted">Loading history…</div>;
+    return <div className="flex justify-center py-8 text-sm text-fg-muted">{t('common.loading')}…</div>;
   }
   return <HistoryTab entries={allEntries} lineById={emptyLineById} />;
 }

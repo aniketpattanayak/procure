@@ -52,9 +52,9 @@ export function InboxItemsView({ rows, docId }: { rows: InboxItem[]; docId?: str
       await docsApi.act(r.i.docTypeKey, r.i.documentId, { action: 'unhold', stageKey: r.i.stageKey, lineIds: [r.line.id] }, { version: r.doc.version, idempotencyKey: newIdempotencyKey() });
       await qc.invalidateQueries({ queryKey: docKeys.detail(r.i.docTypeKey, r.i.documentId) });
       await qc.invalidateQueries({ queryKey: docKeys.inbox });
-      toast.success('Released held quantity.');
+      toast.success(t('approve.unheld', { n: 1 }));
     } catch (e) {
-      toast.error('Failed to release hold', isApiError(e) ? e.message : String(e));
+      toast.error(t('error.generic'), isApiError(e) ? e.message : String(e));
     } finally {
       setUnholdBusy(null);
     }
@@ -223,15 +223,14 @@ export function InboxItemsView({ rows, docId }: { rows: InboxItem[]; docId?: str
       {heldItems.length > 0 && (
         <div className="border-t border-border" data-testid="inbox-held-items">
           <div className="flex items-center gap-2 border-b border-border bg-warning/5 px-3 py-2.5">
-            <span className="text-sm font-semibold text-warning">On Hold ({heldItems.length} {heldItems.length === 1 ? 'line' : 'lines'})</span>
-            <span className="text-xs text-fg-muted ml-1">— release to put back into the approval queue</span>
+            <span className="text-sm font-semibold text-warning">{t('approve.held.title', { n: heldItems.length })}</span>
           </div>
           <table className="w-full min-w-[640px] overflow-x-auto text-sm">
             <thead className="bg-subtle text-left text-xs text-fg-muted">
               <tr>
                 <th className="px-3 py-2 font-medium">{t('approve.confirm.doc')}</th>
                 <th className="px-3 py-2 font-medium">{t('docs.col.item')}</th>
-                <th className="px-3 py-2 text-right font-medium">{t('approve.held.qty', { qty: '' }).trim()}</th>
+                <th className="px-3 py-2 text-right font-medium">{t('docs.qty.held')}</th>
                 <th className="w-28 px-3 py-2" />
               </tr>
             </thead>
