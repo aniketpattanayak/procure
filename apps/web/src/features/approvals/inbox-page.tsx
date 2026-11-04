@@ -28,7 +28,7 @@ export function InboxPage() {
   const docType = sp.get('docType') ?? undefined;
   const stage = sp.get('stage') ?? undefined;
   const overdue = sp.get('overdue') === '1';
-  const view = sp.get('view') === 'items' ? 'items' : 'docs';
+  const view = (sp.get('view') === 'items' ? 'items' : sp.get('view') === 'history' ? 'history' : 'docs') as 'docs' | 'items' | 'history';
   const set = (patch: Record<string, string | null>) => {
     const n = new URLSearchParams(sp.toString());
     for (const [k, v] of Object.entries(patch)) { if (v) n.set(k, v); else n.delete(k); }
@@ -55,6 +55,8 @@ export function InboxPage() {
           className={cn('px-4 py-1.5 text-sm font-semibold transition-colors', view === 'docs' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}>{t('inbox.view.docs')}</button>
         <button type="button" aria-pressed={view === 'items'} onClick={() => set({ view: 'items' })} data-testid="inbox-view-items"
           className={cn('border-l border-border px-4 py-1.5 text-sm font-semibold transition-colors', view === 'items' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}>{t('inbox.view.items')}</button>
+        <button type="button" aria-pressed={view === 'history'} onClick={() => set({ view: 'history' })} data-testid="inbox-view-history"
+          className={cn('border-l border-border px-4 py-1.5 text-sm font-semibold transition-colors', view === 'history' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}>History</button>
       </div>
 
       <Card className="mt-3 overflow-hidden" data-testid="inbox-list">
@@ -65,6 +67,8 @@ export function InboxPage() {
         ) : rows.length === 0 ? (
           <EmptyState icon={<Inbox />} title={docType || overdue ? t('inbox.emptyFiltered') : t('inbox.empty')} description={docType || overdue ? undefined : t('inbox.emptyHint')}
             action={docType || overdue ? <Button variant="secondary" onClick={() => set({ docType: null, stage: null, overdue: null })}>{t('docs.list.clearFilters')}</Button> : undefined} />
+        ) : view === 'history' ? (
+          <InboxHistoryTabContent rows={rows} />
         ) : view === 'items' ? (
           <InboxItemsView rows={rows} />
         ) : (

@@ -122,7 +122,6 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
     });
   }, [doc.version, pendingLines, stage.key, firstDraft]);
 
-  const [tab, setTab] = useState<'items' | 'history'>('items');
   const [active, setActive] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const onToggle = useMemo(() => toggleSel(setSelected), []);
