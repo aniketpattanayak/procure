@@ -1,14 +1,16 @@
 'use client';
 import type { InboxCounts, InboxItem } from '@procure/schema';
 import { Button, Card, cn, EmptyState, LoadMore, Skeleton, Switch } from '@procure/ui';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueries } from '@tanstack/react-query';
 import { ChevronRight, Clock, Forward, Inbox, Siren } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { PageBody, PageHeader } from '@/components/page';
 import { useTenantLocale } from '@/engines/form-renderer/tenant';
 import { formatDecimal } from '@/engines/form-renderer/values';
-import { approvalsApi, docKeys } from '@/features/documents/api';
+import { approvalsApi, docKeys, docsApi } from '@/features/documents/api';
+import { HistoryTab } from './approve-screen';
+import type { DocumentLineRow, TimelineEntry } from '@procure/schema';
 import { dueText } from '@/features/documents/workflow-progress';
 import { t } from '@/i18n';
 import { InboxItemsView } from './inbox-items';
@@ -116,7 +118,7 @@ function InboxRow({ i, currency }: { i: InboxItem; currency: string }) {
   const due = dueText(i.dueAt, i.overdue);
   return (
     <li>
-      <Link href={approveHref(i)} className="group flex items-center gap-3 px-4 py-3 hover:bg-subtle focus-visible:bg-accent-soft focus-visible:outline-none" data-testid={`inbox-row-${i.number ?? i.documentId}`}>
+      <Link href={`/approvals?view=items&doc=${i.documentId}`} className="group flex items-center gap-3 px-4 py-3 hover:bg-subtle focus-visible:bg-accent-soft focus-visible:outline-none" data-testid={`inbox-row-${i.number ?? i.documentId}`}>
         <span className={cn('grid size-10 shrink-0 place-items-center rounded-lg text-sm font-semibold', i.overdue ? 'bg-danger-soft text-danger' : 'bg-accent-soft text-accent')} aria-hidden>
           {i.overdue ? <Siren className="size-5" /> : i.pendingLines}
         </span>
@@ -142,4 +144,24 @@ function InboxRow({ i, currency }: { i: InboxItem; currency: string }) {
       </Link>
     </li>
   );
+}
+
+function InboxHistoryTabContent({ rows }: { rows: InboxItem[] }) {
+  const queries = useQueries({
+    queries: rows.map(item => ({
+      queryKey: docKeys.timeline(item.docTypeKey, item.documentId),
+      queryFn: () => docsApi.timeline(item.docTypeKey, item.documentId),
+      staleTime: 60_000,
+    })),
+  });
+  const emptyLineById = new Map<string, DocumentLineRow>();
+  const allEntries: TimelineEntry[] = [];
+  for (const q of queries) {
+    if (q.data) allEntries.push(...q.data);
+  }
+  allEntries.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  if (queries.some(q => q.isLoading)) {
+    return <div className="flex justify-center py-8 text-sm text-fg-muted">Loading history…</div>;
+  }
+  return <HistoryTab entries={allEntries} lineById={emptyLineById} />;
 }

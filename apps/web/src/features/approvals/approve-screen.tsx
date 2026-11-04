@@ -1,7 +1,7 @@
 'use client';
 import type { DocListRow, DocTypeSummary, DocumentLineRow, DocumentRow, TimelineEntry, WorkflowActionInput } from '@procure/schema';
 import {
-  Badge, Button, Card, Checkbox, cn, Dialog, DialogContent, EmptyState, Input, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, toast, useVirtualizer,
+  Badge, Button, Card, Checkbox, cn, Dialog, DialogContent, EmptyState, Input, Textarea, toast, useVirtualizer,
 } from '@procure/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, CheckCircle2, ChevronDown, ChevronUp, CircleSlash, Clock, Forward, Keyboard, Lock, Package, PauseCircle, Play, ShoppingCart, Undo2, XCircle } from 'lucide-react';
@@ -366,12 +366,7 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
             {heldLines.length > 0 && (
               <UnholdPanel lines={heldLines} stageKey={stage.key} busy={busy} canUnhold={allowed.has('unhold')} onUnhold={ids => void unhold(ids)} />
             )}
-          </TabsContent>
-
-          <TabsContent value="history">
-            <HistoryTab entries={timeline.data ?? []} lineById={lineById} />
-          </TabsContent>
-        </Tabs>
+        </div>
       </div>
 
       {granularity === 'line' && drafts.length > 0 && (
@@ -430,7 +425,7 @@ interface HistoryRow {
   reason: string;
 }
 
-function HistoryTab({ entries, lineById }: { entries: TimelineEntry[]; lineById: Map<string, DocumentLineRow> }) {
+export function HistoryTab({ entries, lineById }: { entries: TimelineEntry[]; lineById: Map<string, DocumentLineRow> }) {
   // Build a map from lineNo to line for label lookup
   const lineByNo = useMemo(() => {
     const m = new Map<number, DocumentLineRow>();
