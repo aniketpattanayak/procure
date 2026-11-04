@@ -1,4 +1,5 @@
 'use client';
+import { useMemo } from 'react';
 import type { InboxCounts, InboxItem } from '@procure/schema';
 import { Button, Card, cn, EmptyState, LoadMore, Skeleton, Switch } from '@procure/ui';
 import { useInfiniteQuery, useQueries } from '@tanstack/react-query';
@@ -152,21 +153,34 @@ function InboxRow({ i, currency }: { i: InboxItem; currency: string }) {
 }
 
 function InboxHistoryTabContent({ rows }: { rows: InboxItem[] }) {
-  const queries = useQueries({
+  const timelineQueries = useQueries({
     queries: rows.map(item => ({
       queryKey: docKeys.timeline(item.docTypeKey, item.documentId),
       queryFn: () => docsApi.timeline(item.docTypeKey, item.documentId),
       staleTime: 60_000,
     })),
   });
-  const emptyLineById = new Map<string, DocumentLineRow>();
+  const detailQueries = useQueries({
+    queries: rows.map(item => ({
+      queryKey: docKeys.detail(item.docTypeKey, item.documentId),
+      queryFn: () => docsApi.get(item.docTypeKey, item.documentId),
+      staleTime: 15_000,
+    })),
+  });
+  const lineById = useMemo(() => {
+    const m = new Map<string, DocumentLineRow>();
+    for (const q of detailQueries) {
+      if (q.data) for (const l of q.data.lines) m.set(l.id, l);
+    }
+    return m;
+  }, [detailQueries]);
   const allEntries: TimelineEntry[] = [];
-  for (const q of queries) {
+  for (const q of timelineQueries) {
     if (q.data) allEntries.push(...q.data);
   }
   allEntries.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-  if (queries.some(q => q.isLoading)) {
+  if (timelineQueries.some(q => q.isLoading) || detailQueries.some(q => q.isLoading)) {
     return <div className="flex justify-center py-8 text-sm text-fg-muted">{t('common.loading')}…</div>;
   }
-  return <HistoryTab entries={allEntries} lineById={emptyLineById} />;
+  return <HistoryTab entries={allEntries} lineById={lineById} />;
 }
