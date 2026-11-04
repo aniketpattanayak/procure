@@ -861,17 +861,17 @@ export function ItemContextPanel({ itemId, uom, indent = true }: { itemId: strin
   );
 
   const DocTable = ({ rows, loading }: { rows: DocListRow[] | undefined; loading: boolean }) => {
-    if (loading) return <p className="py-3 text-center text-xs text-fg-muted">Loading…</p>;
-    if (!rows?.length) return <p className="py-3 text-center text-xs text-fg-muted">No records found.</p>;
+    if (loading) return <p className="py-3 text-center text-xs text-fg-muted">{t('common.loading')}…</p>;
+    if (!rows?.length) return <p className="py-3 text-center text-xs text-fg-muted">{t('docs.list.emptyFiltered')}</p>;
     return (
       <table className="w-full text-xs">
         <thead><tr className="border-b border-border bg-muted/60 text-left text-fg-muted">
           <th className="px-3 py-1.5 font-medium">#</th>
-          <th className="px-3 py-1.5 font-medium">Number</th>
-          <th className="px-3 py-1.5 font-medium">Date</th>
-          <th className="px-3 py-1.5 font-medium">Status</th>
-          <th className="px-3 py-1.5 font-medium">Location</th>
-          <th className="px-3 py-1.5 font-medium text-right">Amount</th>
+          <th className="px-3 py-1.5 font-medium">{t('docs.col.number')}</th>
+          <th className="px-3 py-1.5 font-medium">{t('docs.col.date')}</th>
+          <th className="px-3 py-1.5 font-medium">{t('docs.col.status')}</th>
+          <th className="px-3 py-1.5 font-medium">{t('docs.col.location')}</th>
+          <th className="px-3 py-1.5 font-medium text-right">{t('docs.col.total')}</th>
         </tr></thead>
         <tbody className="divide-y divide-border">
           {rows.map((r, i) => (
@@ -913,11 +913,11 @@ export function ItemContextPanel({ itemId, uom, indent = true }: { itemId: strin
 
       {open === 'inventory' && (
         <div className="mt-1.5 overflow-hidden rounded border border-border bg-subtle">
-          <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted">Inventory Summary</div>
+          <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted">{t('stock.title')}</div>
           {inv.isLoading ? (
-            <p className="py-3 text-center text-xs text-fg-muted">Loading…</p>
+            <p className="py-3 text-center text-xs text-fg-muted">{t('common.loading')}…</p>
           ) : !inv.data ? (
-            <p className="py-3 text-center text-xs text-fg-muted">No inventory data found.</p>
+            <p className="py-3 text-center text-xs text-fg-muted">{t('docs.list.emptyFiltered')}</p>
           ) : (
             <div>
               {/* Totals summary row */}
