@@ -367,7 +367,6 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
               <UnholdPanel lines={heldLines} stageKey={stage.key} busy={busy} canUnhold={allowed.has('unhold')} onUnhold={ids => void unhold(ids)} />
             )}
         </div>
-      </div>
 
       {granularity === 'line' && drafts.length > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-bg/95 backdrop-blur lg:left-[var(--sidebar-w)]" data-testid="decision-summary-bar">
