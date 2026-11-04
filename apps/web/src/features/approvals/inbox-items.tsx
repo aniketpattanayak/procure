@@ -178,7 +178,7 @@ export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
                   <td />
                   <td colSpan={6} className="px-3 pb-3 pt-0">
                     {typeof r.line.values.item === 'string' && r.line.values.item && <ItemContextPanel itemId={r.line.values.item} uom={uom} indent={false} />}
-                    <LineHistory line={r.line} lineNo={r.line.lineNo} indent={false} />
+                    <LineHistory docTypeKey={r.i.docTypeKey} docId={r.i.documentId} line={r.line} lineNo={r.line.lineNo} indent={false} />
                   </td>
                 </tr>
                 </Fragment>

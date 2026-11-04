@@ -343,3 +343,43 @@ function RevisionDetailSheet({ revision, uom, onClose }: { revision: VendorQuote
     </Sheet>
   );
 }
+
+// ---------------------------------------------------------------------------
+// LineVendorLog: exported for use in indent-accordion (shows vendor log inline)
+// ---------------------------------------------------------------------------
+export function LineVendorLog({ doc, line }: { doc: DocumentRow; line: DocumentLineRow }) {
+  const { currency } = useTenantLocale();
+  const uom = lineUom(line);
+  const quotes = useQuery({
+    queryKey: procKeys.quotes(line.id, true),
+    queryFn: () => procApi.quotes(line.id, true),
+    staleTime: 60_000,
+  });
+
+  if (quotes.isLoading) return <Skeleton className="h-24 w-full" />;
+  if (quotes.isError) return <InlineAlert>{isApiError(quotes.error) ? quotes.error.message : t('proc.quotes.failed')}</InlineAlert>;
+  const groups = groupByVendor(quotes.data ?? []);
+
+  if (groups.length === 0) {
+    return <p className="py-3 text-center text-xs text-fg-muted">{t('proc.quotes.empty')}</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {groups.map(g => (
+        <div key={g.vendor.id} className="rounded border border-border bg-surface">
+          <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold text-fg-muted">{g.vendor.name}</div>
+          <ul className="divide-y divide-border">
+            {g.rows.filter(r => r.isCurrent).map(r => (
+              <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-0.5 px-3 py-1.5 text-xs">
+                <span className="font-medium tabular-nums">{fmtRate(r.quotedRate, currency)} / {uom}</span>
+                {r.taxPct && r.taxPct !== '0' && <span className="text-fg-muted">{t('proc.cmp.tax')}: {fmtPct(r.taxPct)}</span>}
+                {r.validUntil && <span className="text-fg-muted">{t('proc.sel.q.valid')}: {fmtDate(r.validUntil)}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}

@@ -836,7 +836,7 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected
 
 type ContextSection = 'indent' | 'po' | 'inventory';
 
-function ItemContextPanel({ itemId, uom }: { itemId: string; uom: string }) {
+export function ItemContextPanel({ itemId, uom, indent = true }: { itemId: string; uom: string; indent?: boolean }) {
   const [open, setOpen] = useState<ContextSection | null>(null);
 
   // Last 5 indents for this item
@@ -1043,5 +1043,108 @@ function DocumentDecision({ doc, stage, actions, busy, onDecide }: {
         </Button>
       </div>
     </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// LineHistory: exported for use in inbox-items (shows approval history inline)
+// ---------------------------------------------------------------------------
+export function LineHistory({ docTypeKey, docId, line, lineNo, indent = true }: { docTypeKey: string; docId: string; line: DocumentLineRow; lineNo: number; indent?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const history = useQuery({
+    queryKey: ['line-history', docTypeKey, docId, lineNo],
+    queryFn: () => docsApi.timeline(docTypeKey, docId),
+    enabled: open,
+    staleTime: 60_000,
+  });
+
+  const rows = useMemo<HistoryRow[]>(() => {
+    if (!history.data) return [];
+    const result: HistoryRow[] = [];
+    const wfEntries = [...history.data].filter(e => e.kind === 'workflow' && e.lineDecisions?.some(ld => ld.lineNo === lineNo)).reverse();
+    for (const entry of wfEntries) {
+      for (const ld of entry.lineDecisions ?? []) {
+        if (ld.lineNo !== lineNo) continue;
+        const hasApprove = !!ld.approve && ld.approve !== '0';
+        const hasHold = !!ld.hold && ld.hold !== '0';
+        const hasReject = !!ld.reject && ld.reject !== '0';
+        let action: HistoryRow['action'];
+        if (hasApprove && !hasHold && !hasReject) action = 'approved';
+        else if (hasHold && !hasApprove && !hasReject) action = 'held';
+        else if (hasReject && !hasApprove && !hasHold) action = 'rejected';
+        else action = 'mixed';
+        const qtyParts: string[] = [];
+        if (hasApprove) qtyParts.push(fmtQty(ld.approve!));
+        if (hasHold) qtyParts.push(fmtQty(ld.hold!));
+        if (hasReject) qtyParts.push(fmtQty(ld.reject!));
+        result.push({
+          entryId: `${entry.id}:${ld.lineNo}`,
+          at: entry.at,
+          actorName: entry.actor?.name ?? '—',
+          stageTitle: entry.title,
+          lineNo: ld.lineNo,
+          itemLabel: lineItemLabel(line),
+          action,
+          qty: qtyParts.join(' / ') || '—',
+          reason: ld.reason ?? entry.detail ?? '',
+        });
+      }
+    }
+    return result;
+  }, [history.data, line, lineNo]);
+
+  const tone = (a: HistoryRow['action']) => {
+    if (a === 'approved') return 'success' as const;
+    if (a === 'held') return 'warning' as const;
+    if (a === 'rejected') return 'danger' as const;
+    return 'neutral' as const;
+  };
+  const label = (a: HistoryRow['action']) => {
+    if (a === 'approved') return t('approve.history.action.approved');
+    if (a === 'held') return t('approve.history.action.held');
+    if (a === 'rejected') return t('approve.history.action.rejected');
+    return t('approve.history.action.mixed');
+  };
+
+  return (
+    <div className={cn('mt-2', indent && 'md:ml-[calc(4.25rem+1.5rem)]')}>
+      <button type="button" onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
+        className={cn('inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition-colors',
+          open ? 'border-accent bg-accent text-white' : 'border-border bg-surface text-fg-muted hover:bg-subtle hover:text-fg')}
+        aria-expanded={open}>
+        <Clock className="size-3" aria-hidden />{t('approve.history.title')}{open ? <ChevronUp className="size-3" aria-hidden /> : <ChevronDown className="size-3" aria-hidden />}
+      </button>
+      {open && (
+        <div className="mt-1.5 overflow-hidden rounded border border-border bg-subtle">
+          <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted">{t('approve.history.title')}</div>
+          {history.isLoading ? (
+            <p className="py-3 text-center text-xs text-fg-muted">{t('common.loading')}</p>
+          ) : rows.length === 0 ? (
+            <p className="py-3 text-center text-xs text-fg-muted">{t('approve.history.empty')}</p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead><tr className="border-b border-border bg-muted/60 text-left text-fg-muted">
+                <th className="px-3 py-1.5 font-medium">{t('approve.history.col.date')}</th>
+                <th className="px-3 py-1.5 font-medium">{t('approve.history.col.stage')}</th>
+                <th className="px-3 py-1.5 font-medium">{t('approve.history.col.by')}</th>
+                <th className="px-3 py-1.5 font-medium">{t('approve.history.col.action')}</th>
+                <th className="px-3 py-1.5 font-medium text-right">{t('approve.history.col.qty')}</th>
+              </tr></thead>
+              <tbody className="divide-y divide-border">
+                {rows.map(r => (
+                  <tr key={r.entryId}>
+                    <td className="px-3 py-1.5 tabular-nums text-fg-muted whitespace-nowrap">{new Date(r.at).toLocaleDateString()}</td>
+                    <td className="px-3 py-1.5 text-fg-muted">{r.stageTitle}</td>
+                    <td className="px-3 py-1.5">{r.actorName}</td>
+                    <td className="px-3 py-1.5"><Badge tone={tone(r.action)}>{label(r.action)}</Badge></td>
+                    <td className="px-3 py-1.5 tabular-nums text-right font-medium">{r.qty}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

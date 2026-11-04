@@ -1,7 +1,6 @@
 {
   "app.name": "Procure",
   "app.tagline": "Procurement and inventory",
-
   "common.loading": "Loading",
   "common.cancel": "Cancel",
   "common.close": "Close",
@@ -19,11 +18,8 @@
   "common.saveChanges": "Save changes",
   "common.comingSoon": "Coming soon",
   "common.skipToContent": "Skip to content",
-
   "error.generic": "Something went wrong. Try again.",
-
   "validation.reasonMin": "Enter a reason of at least 3 characters",
-
   "nav.primary": "Primary",
   "nav.sidebar": "Sidebar",
   "nav.menu": "Menu",
@@ -44,35 +40,29 @@
   "nav.plans": "Plans",
   "nav.platformUsage": "Usage",
   "nav.audit": "Audit log",
-
   "topbar.search": "Search",
   "topbar.searchPlaceholder": "Search",
   "topbar.allLocations": "All locations",
-
   "profile.menu": "Account menu for {name}",
   "profile.sessions": "My sessions",
   "profile.changePassword": "Change password",
   "profile.logout": "Sign out",
-
   "theme.label": "Theme",
   "theme.system": "System",
   "theme.light": "Light",
   "theme.dark": "Dark",
-
   "notifications.label": "Notifications",
   "notifications.labelUnread": "Notifications, {count} unread",
   "notifications.title": "Notifications",
   "notifications.empty": "You're all caught up.",
   "notifications.error": "Couldn't load notifications.",
   "notifications.unread": "unread",
-
   "impersonation.region": "Impersonation notice",
   "impersonation.banner": "You are signed in as {tenant} by {admin} — every action is logged",
   "impersonation.exit": "Exit",
   "impersonation.expired": "The tenant session ended. You're back in the platform console.",
   "impersonation.confirmTitle": "Sign in as {name}",
   "impersonation.confirmBody": "You'll act as this tenant's administrator. The session is recorded in both the platform and tenant audit logs.",
-
   "auth.signIn": "Sign in",
   "auth.signInSubtitle": "Use the company code your administrator gave you.",
   "auth.tenantCode": "Company code",
@@ -90,7 +80,6 @@
   "auth.platformSubtitle": "For the Procure operations team.",
   "auth.platformLink": "Platform team sign in",
   "auth.tenantLink": "Company sign in",
-
   "password.title": "Change password",
   "password.subtitle": "Signing in elsewhere will end your other sessions.",
   "password.forcedTitle": "Set a new password",
@@ -105,10 +94,8 @@
   "password.min": "At least {n} characters",
   "password.ruleMet": "met",
   "password.ruleNotMet": "not met",
-
   "guard.adminOnly.title": "Administrators only",
   "guard.adminOnly.body": "Ask a company administrator if you need access to this page.",
-
   "dashboard.greeting": "Welcome, {name}",
   "dashboard.subtitle": "{tenant}",
   "dashboard.modules": "Your modules",
@@ -116,14 +103,11 @@
   "dashboard.noModules": "No modules are enabled on your plan yet.",
   "dashboard.seats": "User seats",
   "dashboard.viewUsage": "View usage",
-
   "module.soonTitle": "This module is on its way",
   "module.soonBody": "It's included in your plan and will appear here once released.",
-
   "table.columns": "Columns",
   "table.loadMore": "Load more",
   "table.error": "Couldn't load this list.",
-
   "users.title": "Users",
   "users.description": "People who can sign in to your company.",
   "users.search": "Search name or email",
@@ -186,9 +170,7 @@
   "users.confirm.forceLogout.body": "Ends all of this user's sessions on every device immediately.",
   "users.resetDone.title": "Password reset",
   "users.resetDone.body": "Share this temporary password with {name}.",
-
   "secret.onceNote": "This is the only time it's shown. Copy it now and share it securely.",
-
   "sessions.myTitle": "My sessions",
   "sessions.myDescription": "Devices currently signed in to your account.",
   "sessions.active": "Active sessions",
@@ -202,7 +184,6 @@
   "sessions.revoked": "Session signed out",
   "sessions.revokeFailed": "Couldn't sign out that session",
   "sessions.empty": "No active sessions",
-
   "roles.title": "Roles",
   "roles.description": "Group permissions and assign them to users.",
   "roles.create.button": "New role",
@@ -220,7 +201,6 @@
   "roles.field.key": "Key",
   "roles.field.keyHint": "Lowercase letters, digits and underscores. Used in integrations; can't be changed later.",
   "roles.field.description": "Description",
-
   "usage.title": "Usage",
   "usage.description": "What your plan includes and how much you're using.",
   "usage.plan": "Plan",
@@ -232,29 +212,23 @@
   "usage.unlimited": "Unlimited",
   "usage.nearLimit": "Near limit",
   "usage.atLimit": "At limit",
-
   "meter.live_count": "Current total",
   "meter.monthly": "Resets monthly",
   "meter.lifetime": "Cumulative",
-
   "tenantStatus.active": "Active",
   "tenantStatus.suspended": "Suspended",
   "tenantStatus.archived": "Archived",
-
   "subStatus.trial": "Trial",
   "subStatus.active": "Active",
   "subStatus.grace": "Grace period",
   "subStatus.expired": "Expired",
   "subStatus.suspended": "Suspended",
-
   "cycle.monthly": "month",
   "cycle.quarterly": "quarter",
   "cycle.yearly": "year",
-
   "featureKind.module": "Modules",
   "featureKind.capability": "Capabilities",
   "featureKind.channel": "Channels",
-
   "tenants.title": "Tenants",
   "tenants.description": "Companies using Procure.",
   "tenants.create": "New tenant",
@@ -271,7 +245,6 @@
   "tenants.col.users": "Users",
   "tenants.col.renewal": "Renews",
   "tenants.col.created": "Created",
-
   "tenant.field.code": "Company code",
   "tenant.field.codeHint": "Typed at sign in. Lowercase letters, digits and hyphens.",
   "tenant.field.name": "Display name",
@@ -315,7 +288,6 @@
   "tenant.resetAdmin.title": "Reset the admin's password?",
   "tenant.resetAdmin.body": "A new temporary password is created for the tenant's administrator. They must change it at next sign in.",
   "tenant.resetAdmin.doneTitle": "Admin password reset",
-
   "wizard.title": "New tenant",
   "wizard.progress": "Progress",
   "wizard.complete": "complete",
@@ -336,7 +308,6 @@
   "wizard.done.note": "This is the only time it's shown. The admin must change it at first sign in.",
   "wizard.done.open": "Open tenant",
   "wizard.done.back": "Back to tenants",
-
   "entitlement.limits": "Limits",
   "entitlement.limitsHint": "Plan value, any override, and live usage.",
   "entitlement.features": "Features",
@@ -352,7 +323,6 @@
   "entitlement.source.override": "Override",
   "entitlement.on": "On",
   "entitlement.off": "Off",
-
   "override.title": "Override: {name}",
   "override.limitPlan": "Plan value: {value}. Currently used: {used}.",
   "override.featurePlan": "{state}",
@@ -377,7 +347,6 @@
   "override.col.item": "Item",
   "override.col.change": "Change",
   "override.col.by": "By",
-
   "subscription.current": "Current",
   "subscription.change": "Change subscription",
   "subscription.changeHint": "Closes the current subscription and starts a new one now.",
@@ -392,7 +361,6 @@
   "subscription.history": "History",
   "subscription.none": "No subscription.",
   "subscription.noHistory": "No earlier subscriptions.",
-
   "plans.title": "Plans",
   "plans.description": "What each plan includes and its limits.",
   "plans.create": "New plan",
@@ -428,12 +396,10 @@
   "plans.field.cycle": "Billing cycle",
   "plans.field.trialDays": "Trial days",
   "plans.field.active": "Available for new subscriptions",
-
   "platformUsage.title": "Usage",
   "platformUsage.description": "Limits and live usage across every tenant.",
   "platformUsage.onlyHot": "Only tenants at 80% or more",
   "platformUsage.empty": "No tenants to show",
-
   "audit.title": "Audit log",
   "audit.description": "Every platform action, including impersonation.",
   "audit.search": "Search action or entity",
@@ -444,7 +410,6 @@
   "audit.col.entity": "Record",
   "audit.col.tenant": "Tenant",
   "audit.col.ip": "IP address",
-
   "notFound.title": "Page not found",
   "notFound.body": "The page may have moved, or you may not have access.",
   "notFound.home": "Go to home",
@@ -528,7 +493,6 @@
   "files.useSignature": "Use signature",
   "files.clear": "Clear",
   "files.signHint": "Sign inside the box",
-
   "guard.noAccess.title": "You don't have access to this page",
   "guard.noAccess.body": "Ask a company administrator to give your role access.",
   "nav.section.masters": "Masters",
@@ -774,7 +738,6 @@
   "scope.summaryNoneUser": "No extra locations: the roles' scope applies",
   "location.allMine": "All my locations",
   "settings.labels.placeholder": "Same as default",
-
   "fb.group.basic": "Basic",
   "fb.group.numbers": "Numbers",
   "fb.group.choice": "Choice",
@@ -1052,7 +1015,6 @@
   "fb.view": "View",
   "fb.viewVersion": "Version {n}",
   "fb.viewVersionHint": "Read-only look at this version. Try the fields; nothing is saved.",
-
   "forms.title": "Forms",
   "forms.description": "Every form in Procure is configured here: fields, layout, rules and formulas.",
   "forms.colName": "Form",
@@ -1193,14 +1155,10 @@
   "masters.wizard.fieldsPoint2": "Add text, numbers, lookups to other masters, images and formulas.",
   "masters.wizard.fieldsPoint3": "Publish the form to start adding records.",
   "masters.wizard.create": "Create and design form",
-
   "fb.canvas.oneColumn": "1 column",
-
   "fr.lookup.noneForParent": "Nothing available for the chosen {label}",
-
   "masters.inUseOnce": "Used once",
   "masters.importProblem": "1 problem in {rows} rows",
-
   "nav.workflows": "Workflows",
   "nav.docTypes": "Document types",
   "nav.numbering": "Numbering",
@@ -1499,7 +1457,6 @@
   "wf.sim.why.disabled": "Skipped: the stage is turned off.",
   "wf.sim.why.no_actor_skip": "Skipped: nobody can act and the stage is set to skip.",
   "wf.sim.why.no_actor_admins": "Nobody matches the rules, so tenant admins get it.",
-
   "nav.approvals": "Approvals",
   "docs.yes": "Yes",
   "docs.no": "No",
@@ -1781,7 +1738,6 @@
   "comments.editFailed": "Couldn't save the comment",
   "comments.deleteFailed": "Couldn't delete the comment",
   "comments.mentionList": "People to mention",
-
   "dt.title": "Document types",
   "dt.description": "Transactions your teams raise, such as capex requests. Each has a header form, optional lines, numbering and an approval workflow.",
   "dt.new": "New document type",
@@ -2012,25 +1968,19 @@
   "auditlog.check.none": "No checks yet.",
   "auditlog.check.ok": "Intact",
   "auditlog.check.bad": "Broken",
-
   "approve.switchedToDocument": "This stage decides the whole document. Pick one decision for all lines.",
-
   "num.resetShort.fy": "Each financial year",
   "num.resetShort.month": "Each month",
   "num.resetShort.never": "Never",
   "auditlog.f.entityEg": "e.g. document",
   "auditlog.f.actionEg": "e.g. update",
-
   "auditlog.check.when": "Checked {when}",
-
   "wf.prop.whenPlaceholder": "Always runs",
-
   "docs.wf.skip.condition_false": "Condition not met",
   "docs.wf.skip.disabled": "Stage turned off",
   "docs.wf.skip.no_actor": "No one could act",
   "docs.wf.skip.no_actor_skip": "No one could act",
   "docs.wf.skip.stage_disabled": "Stage turned off",
-
   "docs.dashboard.hint": "Documents you can open and create.",
   "nav.section.procurement": "Procurement",
   "nav.procurement.select": "Select vendors",
@@ -2371,7 +2321,6 @@
   "po.sc.reason": "Reason",
   "po.sc.confirm": "Short-close",
   "po.sc.done": "Short-closed",
-
   "nav.exports": "Exports",
   "report.home.title": "Reports",
   "report.home.subtitle": "Run ready-made reports, or build your own from any document type or master.",
@@ -2711,7 +2660,6 @@
   "dash.share.canViewFor": "{role} can open",
   "dash.share.defaultFor": "Home page for {role}",
   "dash.share.note": "A role's home page replaces the standard dashboard for its members, unless they made their own. Save to apply.",
-
   "nav.templates": "Templates",
   "nav.triggers": "Notification rules",
   "nav.webhooks": "Webhooks",
@@ -3212,7 +3160,6 @@
   "webhook.group.stock": "Stock",
   "webhook.group.procurement": "Procurement",
   "webhook.allEventsShort": "All events",
-
   "nav.section.stores": "Stores",
   "nav.stock": "Stock",
   "nav.stock.receive": "Receive against PO",
@@ -3581,5 +3528,102 @@
   "nav.customFields": "Custom fields",
   "nav.gstSettings": "GST / HSN",
   "nav.budgets": "Budgets",
-  "proc.rfq.send": "Send RFQ"
+  "proc.rfq.send": "Send RFQ",
+  "access.dept.admin": "This user is a company admin: admins always see every department, whatever is set here.",
+  "access.dept.all": "All departments",
+  "access.dept.allHint": "No department limit. Also sees indents without a department.",
+  "access.dept.hint": "Limit which departments indents this user can see and act on (lists, approvals, vendor selection, PO, reports). Location access still applies.",
+  "access.dept.none": "No departments in the Department master yet.",
+  "access.dept.pickOne": "Tick at least one department, or turn on All departments.",
+  "access.dept.rule": "This user will see indents of the ticked departments, and any indent they created themselves. Indents without a department are hidden.",
+  "access.dept.save": "Save departments",
+  "access.dept.saved": "Department access saved",
+  "access.dept.tab": "Departments",
+  "access.dept.title": "Department access",
+  "approve.addedAtApproval": "(+{qty} added at approval)",
+  "approve.badQty": "Line {n}: enter a valid qty.",
+  "approve.badQtyDoc": "{line}: enter a valid qty.",
+  "approve.confirm.doc": "Document",
+  "approve.confirm.extra": "+{qty} extra",
+  "approve.confirm.left": "Left pending",
+  "approve.confirm.ok": "{action} {n} item(s)",
+  "approve.confirm.summary": "{items} item(s) in {docs} document(s). Check the qty below, then confirm.",
+  "approve.confirm.titleApprove": "Confirm approval",
+  "approve.confirm.titleHold": "Confirm hold",
+  "approve.confirm.titleReject": "Confirm rejection",
+  "approve.confirm.total": "Total",
+  "approve.didApprove": "{n} item(s) approved",
+  "approve.didHold": "{n} item(s) put on hold",
+  "approve.didReject": "{n} item(s) rejected",
+  "approve.overHint": "+{qty} more than pending",
+  "approve.overPending": "Line {n}: qty cannot be more than pending ({pending}).",
+  "approve.overPendingDoc": "{line}: qty cannot be more than pending ({pending}).",
+  "approve.overPendingShort": "Max {pending}",
+  "approve.qtyToAct": "Qty to act on",
+  "approve.reasonNeeded": "Write a reason to hold or reject.",
+  "approve.reasonPlaceholder": "Reason (needed for Hold / Reject)",
+  "approve.someFailed": "{n} document(s) could not be saved",
+  "approve.typeQtyFirst": "Type a qty in at least one row first.",
+  "approve.typeQtyThen": "Type qty in the rows, then",
+  "docs.acc.items": "{n} item(s)",
+  "docs.acc.loadFailed": "Couldn't load this indent.",
+  "docs.acc.notApproved": "Not approved yet",
+  "docs.acc.notApprovedLong": "The vendor log opens once this item is approved.",
+  "docs.acc.uom": "UOM",
+  "docs.acc.vendorLog": "Vendor log",
+  "docs.acc.view": "View",
+  "docs.status.approvedExcess": "Approved (excess)",
+  "inbox.items.count": "{n} item(s)",
+  "inbox.items.empty": "No items are waiting for you.",
+  "inbox.items.hint": "Tick rows or type qty, then",
+  "inbox.items.requested": "Requested",
+  "inbox.view.docs": "Documents",
+  "inbox.view.items": "All items",
+  "inbox.view.label": "View",
+  "proc.quote.approve": "Approve",
+  "proc.quote.approveConfirm": "Select {vendor} for this line ({qty} {uom} at {rate})?",
+  "proc.quote.approveError": "Couldn't approve this quote. It may have been superseded.",
+  "proc.quote.approveTitle": "Approve quote from {vendor}",
+  "proc.quote.approved": "Vendor approved — vendor selection created.",
+  "proc.quote.approving": "Approving…",
+  "proc.sel.confirm.amount": "Amount",
+  "proc.sel.confirm.grand": "Grand total",
+  "proc.sel.confirm.indent": "Indent",
+  "proc.sel.confirm.item": "Item",
+  "proc.sel.confirm.location": "Location",
+  "proc.sel.confirm.qty": "Qty",
+  "proc.sel.confirm.summary": "{lines} indent line(s) to {vendors} vendor(s). Check below, then save.",
+  "proc.sel.confirm.title": "Confirm vendor selection",
+  "proc.sel.confirm.vendorTotal": "Total for {vendor}",
+  "proc.sel.q.addVendor": "Add another vendor",
+  "proc.sel.q.belowMoq": "Below MOQ",
+  "proc.sel.q.best": "Best",
+  "proc.sel.q.date": "Date",
+  "proc.sel.q.expired": "Expired",
+  "proc.sel.q.freight": "Freight / unit",
+  "proc.sel.q.history": "Past PO rates",
+  "proc.sel.q.landed": "Landed / unit",
+  "proc.sel.q.lead": "Lead time",
+  "proc.sel.q.leadDays": "{n} days",
+  "proc.sel.q.moq": "MOQ",
+  "proc.sel.q.none": "No vendor quotes logged for this item yet. Use “Add another vendor” to pick any vendor and type a rate.",
+  "proc.sel.q.other": "Other vendors",
+  "proc.sel.q.po": "PO",
+  "proc.sel.q.qty": "Qty ({uom})",
+  "proc.sel.q.qtyFor": "Qty for {vendor}",
+  "proc.sel.q.qtyPh": "Qty",
+  "proc.sel.q.rate": "Rate",
+  "proc.sel.q.ratePh": "Rate",
+  "proc.sel.q.tax": "Tax",
+  "proc.sel.q.terms": "Payment terms",
+  "proc.sel.q.toSelect": "To select",
+  "proc.sel.q.total": "Landed total",
+  "proc.sel.q.valid": "Valid till",
+  "proc.sel.q.vendor": "Vendor",
+  "proc.sel.save": "Save",
+  "proc.sel.savedApproved": "Vendor selection {number} saved and approved. Its lines are ready in Create PO.",
+  "stock.combineLocations": "Combine locations",
+  "fb.canvas.deleteSystem": "This is a system field and cannot be deleted.",
+  "approve.history.title": "Approval history",
+  "approve.history.col.by": "By"
 }
