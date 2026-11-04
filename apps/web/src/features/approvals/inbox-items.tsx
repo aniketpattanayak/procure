@@ -2,7 +2,7 @@
 import type { DocumentLineRow, DocumentRow, InboxItem } from '@procure/schema';
 import { Button, Checkbox, cn, EmptyState, Input, Skeleton, toast } from '@procure/ui';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
-import { Inbox } from 'lucide-react';
+import { Inbox, Play } from 'lucide-react';
 import Link from 'next/link';
 import { Fragment, useCallback, useMemo, useState } from 'react';
 import { docKeys, docsApi, newIdempotencyKey } from '@/features/documents/api';
@@ -15,30 +15,50 @@ import { ConfirmDecisionDialog, type ConfirmRow, type DecisionKind } from './con
 
 interface ItemRow { key: string; i: InboxItem; doc: DocumentRow; line: DocumentLineRow; pending: string }
 
-export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
+export function InboxItemsView({ rows, docId }: { rows: InboxItem[]; docId?: string }) {
   const qc = useQueryClient();
+  const filteredRows = docId ? rows.filter(i => i.documentId === docId) : rows;
   const details = useQueries({
-    queries: rows.map(i => ({ queryKey: docKeys.detail(i.docTypeKey, i.documentId), queryFn: () => docsApi.get(i.docTypeKey, i.documentId), staleTime: 15_000 })),
+    queries: filteredRows.map(i => ({ queryKey: docKeys.detail(i.docTypeKey, i.documentId), queryFn: () => docsApi.get(i.docTypeKey, i.documentId), staleTime: 15_000 })),
   });
   const loading = details.some(d => d.isLoading);
 
-  const items = useMemo(() => {
+  const { items, heldItems } = useMemo(() => {
     const out: ItemRow[] = [];
-    rows.forEach((i, idx) => {
+    const held: ItemRow[] = [];
+    filteredRows.forEach((i, idx) => {
       const doc = details[idx]?.data;
       if (!doc) return;
       for (const line of [...doc.lines].sort((a, b) => a.lineNo - b.lineNo)) {
         const pending = line.stages?.[i.stageKey]?.pending;
+        const heldQty = line.stages?.[i.stageKey]?.held;
         if (dec.gt0(pending)) out.push({ key: `${i.documentId}:${i.stageKey}:${line.id}`, i, doc, line, pending: pending! });
+        if (dec.gt0(heldQty)) held.push({ key: `held:${i.documentId}:${i.stageKey}:${line.id}`, i, doc, line, pending: heldQty! });
       }
     });
-    return out;
-  }, [rows, details]);
+    return { items: out, heldItems: held };
+  }, [filteredRows, details]);
 
   const [qtys, setQtys] = useState<Record<string, string>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<{ kind: DecisionKind; picked: ItemRow[]; rows: ConfirmRow[] } | null>(null);
+
+  const [unholdBusy, setUnholdBusy] = useState<string | null>(null);
+
+  const unhold = useCallback(async (r: ItemRow) => {
+    setUnholdBusy(r.key);
+    try {
+      await docsApi.act(r.i.docTypeKey, r.i.documentId, { action: 'unhold', stageKey: r.i.stageKey, lineIds: [r.line.id] }, { version: r.doc.version, idempotencyKey: newIdempotencyKey() });
+      await qc.invalidateQueries({ queryKey: docKeys.detail(r.i.docTypeKey, r.i.documentId) });
+      await qc.invalidateQueries({ queryKey: docKeys.inbox });
+      toast.success('Released held quantity.');
+    } catch (e) {
+      toast.error('Failed to release hold', isApiError(e) ? e.message : String(e));
+    } finally {
+      setUnholdBusy(null);
+    }
+  }, [qc]);
 
   const typed = (k: string) => (qtys[k] ?? '').trim() !== '';
   const allOn = items.length > 0 && items.every(r => typed(r.key));
@@ -108,10 +128,10 @@ export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
     if (failed.length) toast.error(t('approve.someFailed', { n: failed.length }), failed.join('\n'));
   }, [confirm, qtys, reasons, qc]);
 
-  if (loading && !items.length) {
+  if (loading && !items.length && !heldItems.length) {
     return <div className="space-y-2 p-4" aria-busy="true">{[0, 1, 2, 3].map(k => <Skeleton key={k} className="h-9 w-full" />)}</div>;
   }
-  if (!items.length) return <EmptyState icon={<Inbox />} title={t('inbox.items.empty')} />;
+  if (!items.length && !heldItems.length) return <EmptyState icon={<Inbox />} title={t('inbox.items.empty')} />;
 
   return (
     <div data-testid="inbox-items">
@@ -199,6 +219,44 @@ export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
       {confirm && (
         <ConfirmDecisionDialog kind={confirm.kind} rows={confirm.rows} reason={''} busy={busy}
           onCancel={() => setConfirm(null)} onConfirm={() => void send()} />
+      )}
+      {heldItems.length > 0 && (
+        <div className="border-t border-border" data-testid="inbox-held-items">
+          <div className="flex items-center gap-2 border-b border-border bg-warning/5 px-3 py-2.5">
+            <span className="text-sm font-semibold text-warning">On Hold ({heldItems.length} {heldItems.length === 1 ? 'line' : 'lines'})</span>
+            <span className="text-xs text-fg-muted ml-1">— release to put back into the approval queue</span>
+          </div>
+          <table className="w-full min-w-[640px] overflow-x-auto text-sm">
+            <thead className="bg-subtle text-left text-xs text-fg-muted">
+              <tr>
+                <th className="px-3 py-2 font-medium">{t('approve.confirm.doc')}</th>
+                <th className="px-3 py-2 font-medium">{t('docs.col.item')}</th>
+                <th className="px-3 py-2 text-right font-medium">{t('approve.held.qty', { qty: '' }).trim()}</th>
+                <th className="w-28 px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {heldItems.map(r => {
+                const uom = lineUom(r.line);
+                return (
+                  <tr key={r.key} data-testid={`held-item-${r.i.number ?? r.i.documentId}-${r.line.lineNo}`}>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className="font-medium tabular-nums">{r.i.number ?? t('docs.draft')}</span>
+                      <span className="block text-xs text-fg-subtle">{r.i.docTypeName} · {r.i.stageName}</span>
+                    </td>
+                    <td className="px-3 py-2">{lineItemLabel(r.line)}</td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums text-warning">{fmtQty(r.pending)} {uom}</td>
+                    <td className="px-3 py-2 text-right">
+                      <Button size="sm" variant="secondary" onClick={() => void unhold(r)} loading={unholdBusy === r.key} disabled={!!unholdBusy} data-testid={`unhold-item-${r.line.lineNo}`}>
+                        <Play className="size-3 mr-1" aria-hidden />{t('approve.held.release')}
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

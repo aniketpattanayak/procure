@@ -29,6 +29,7 @@ export function InboxPage() {
   const stage = sp.get('stage') ?? undefined;
   const overdue = sp.get('overdue') === '1';
   const view = (sp.get('view') === 'items' ? 'items' : sp.get('view') === 'history' ? 'history' : 'docs') as 'docs' | 'items' | 'history';
+  const docId = sp.get('doc') ?? undefined;
   const set = (patch: Record<string, string | null>) => {
     const n = new URLSearchParams(sp.toString());
     for (const [k, v] of Object.entries(patch)) { if (v) n.set(k, v); else n.delete(k); }
@@ -70,7 +71,7 @@ export function InboxPage() {
         ) : view === 'history' ? (
           <InboxHistoryTabContent rows={rows} />
         ) : view === 'items' ? (
-          <InboxItemsView rows={rows} />
+          <InboxItemsView rows={rows} docId={docId} />
         ) : (
           <ul className="divide-y divide-border">
             {rows.map(i => <InboxRow key={`${i.documentId}:${i.stageKey}`} i={i} currency={currency} />)}
