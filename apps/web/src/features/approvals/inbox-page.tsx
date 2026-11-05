@@ -72,7 +72,7 @@ export function InboxPage() {
         ) : view === 'history' ? (
           <InboxHistoryTabContent rows={rows} />
         ) : view === 'items' ? (
-          <InboxItemsView rows={rows} docId={docId} />
+          <InboxItemsView rows={rows} />
         ) : (
           <ul className="divide-y divide-border">
             {rows.map(i => <InboxRow key={`${i.documentId}:${i.stageKey}`} i={i} currency={currency} />)}
@@ -124,7 +124,7 @@ function InboxRow({ i, currency }: { i: InboxItem; currency: string }) {
   const due = dueText(i.dueAt, i.overdue);
   return (
     <li>
-      <Link href={`/approvals?view=items&doc=${i.documentId}`} className="group flex items-center gap-3 px-4 py-3 hover:bg-subtle focus-visible:bg-accent-soft focus-visible:outline-none" data-testid={`inbox-row-${i.number ?? i.documentId}`}>
+      <Link href={approveHref(i)} className="group flex items-center gap-3 px-4 py-3 hover:bg-subtle focus-visible:bg-accent-soft focus-visible:outline-none" data-testid={`inbox-row-${i.number ?? i.documentId}`}>
         <span className={cn('grid size-10 shrink-0 place-items-center rounded-lg text-sm font-semibold', i.overdue ? 'bg-danger-soft text-danger' : 'bg-accent-soft text-accent')} aria-hidden>
           {i.overdue ? <Siren className="size-5" /> : i.pendingLines}
         </span>
