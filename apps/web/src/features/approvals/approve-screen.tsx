@@ -1,31 +1,29 @@
 'use client';
-import type { DocListRow, DocTypeSummary, DocumentLineRow, DocumentRow, TimelineEntry, WorkflowActionInput } from '@procure/schema';
+import type { DocTypeSummary, DocumentLineRow, DocumentRow, WorkflowActionInput } from '@procure/schema';
 import {
-  Button, Card, cn, EmptyState, Input, Textarea, toast, useVirtualizer,
+  Button, Card, Checkbox, cn, EmptyState, Input, Textarea, toast, useVirtualizer,
 } from '@procure/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle2, ChevronDown, ChevronUp, Clock, Forward, Keyboard, Lock, Package, PauseCircle, Play, ShoppingCart, Undo2, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, CircleSlash, Clock, Forward, Keyboard, Lock, PauseCircle, Play, Undo2, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { PageSkeleton } from '@/components/guards';
 import { InlineAlert, PageBody } from '@/components/page';
 import { useTenantLocale } from '@/engines/form-renderer/tenant';
 import { formatDecimal } from '@/engines/form-renderer/values';
 import { docKeys, docsApi, newIdempotencyKey, useDocType } from '@/features/documents/api';
-import { dec, fmtQty, isDecimal } from '@/features/documents/decimal';
+import { dec, fmtQty } from '@/features/documents/decimal';
 import { lineItemLabel, lineUom } from '@/features/documents/lines-table';
 import { decisionPrefill } from '@/features/documents/extensions';
 import '@/features/documents/extensions-installed';
 import { DocStatusBadge } from '@/features/documents/status';
 import { dueText } from '@/features/documents/workflow-progress';
-import { stockApi, stockKeys } from '@/features/stock/api';
 import { t } from '@/i18n';
 import { isApiError, type ApiError } from '@/lib/api';
 import {
-  initDraft, setQty, type Bucket, type LineDraft,
+  draftError, initDraft, needsReason, outcome, setQty, setWhole, skip, summarize, toDecisions, type Bucket, type DraftError, type LineDraft,
 } from './decision-model';
-import { ConfirmDecisionDialog, type ConfirmRow } from './confirm-dialog';
 import { ForwardDialog, SendBackDialog, ShortcutsDialog } from './stage-dialogs';
 
 const VIRTUAL_AFTER = 50;
@@ -74,9 +72,7 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
   const allowed = new Set(doc.allowedActions);
   // The runtime view doesn't carry granularity yet: if the server says "send outcome", switch to document mode.
   const [forceDocument, setForceDocument] = useState(false);
-  const [userGranularity, setUserGranularity] = useState<'line' | 'document' | null>(null);
-  const serverGranularity = forceDocument ? 'document' : granularityOf(doc, stage);
-  const granularity = userGranularity ?? serverGranularity;
+  const granularity = forceDocument ? 'document' : granularityOf(doc, stage);
   const editable = useMemo(() => editableFieldsOf(doc, stage), [doc, stage]);
 
   const lineById = useMemo(() => new Map(doc.lines.map(l => [l.id, l])), [doc.lines]);
@@ -96,7 +92,6 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
   useEffect(() => {
     if (lastVersion.current === doc.version) return;
     lastVersion.current = doc.version;
-    setQtys({});
     setDrafts(prev => {
       const old = new Map(prev.map(d => [d.lineId, d]));
       return pendingLines.map(l => {
@@ -108,10 +103,9 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
   }, [doc.version, pendingLines, stage.key, firstDraft]);
 
   const [active, setActive] = useState(0);
-  // One qty box per line, empty until typed. Lines with a qty get the action pressed in the top bar.
-  const [qtys, setQtys] = useState<Record<string, string>>({});
-  const onQty = useCallback((lineId: string, v: string) => setQtys(q => ({ ...q, [lineId]: v.replace(/[^\d.]/g, '') })), []);
-  const canExceed = type === 'indent';
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const onToggle = useMemo(() => toggleSel(setSelected), []);
+  const [attempted, setAttempted] = useState(false);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
@@ -123,17 +117,13 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
     setDrafts(ds => ds.map(d => (d.lineId === lineId ? fn(d) : d)));
   }, []);
 
-  /** Totals across ALL lines (not just pending drafts) — approved/held/rejected/pendingApproval */
-  const lineQtySummary = useMemo(() => {
-    let approved = '0', held = '0', rejected = '0', pending = '0';
-    for (const l of doc.lines) {
-      approved = dec.add(approved, l.qty.approved);
-      held = dec.add(held, l.qty.held);
-      rejected = dec.add(rejected, l.qty.rejected);
-      pending = dec.add(pending, l.qty.pendingApproval);
-    }
-    return { approved, held, rejected, pending };
-  }, [doc.lines]);
+  const errors = useMemo(() => {
+    const m = new Map<string, DraftError>();
+    for (const d of drafts) { const e = draftError(d, actions); if (e) m.set(d.lineId, e); }
+    return m;
+  }, [drafts, actions]);
+  const summary = useMemo(() => summarize(drafts, lid => { const l = lineById.get(lid); return l ? lineUom(l) : ''; }), [drafts, lineById]);
+  const toSend = drafts.filter(d => outcome(d) !== 'skip').length;
 
   // ------------------------------------------------------------------ actions
   const refresh = useCallback(async (next?: DocumentRow) => {
@@ -172,59 +162,40 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
     if (!stillHere || !next.workflow?.stages.some(s => s.key === stage.key && s.canAct)) router.push(`/docs/${type}/${doc.id}`);
   }, [router, stage.key, type, doc.id]);
 
-  /** Top-bar Approve / Hold / Reject: acts at once on every line with a qty typed (the rest stays pending). */
-  const act = useCallback(async (b: Bucket) => {
+  const submit = useCallback(async () => {
+    setAttempted(true);
     if (busy) return;
-    const rows = drafts.filter(d => (qtys[d.lineId] ?? '').trim() !== '');
-    if (!rows.length) { toast(t('approve.typeQtyFirst')); return; }
-    for (const d of rows) {
-      const v = qtys[d.lineId]!.trim();
-      if (!isDecimal(v) || !dec.gt0(v)) { toast.error(t('approve.badQty', { n: d.lineNo })); return; }
-      if ((b !== 'approve' || !canExceed) && dec.cmp(v, d.pending) > 0) { toast.error(t('approve.overPending', { n: d.lineNo, pending: fmtQty(d.pending) })); return; }
-    }
-    const reason = bulkReason.trim();
-    if ((b === 'hold' || b === 'reject') && reason.length < 3) {
-      toast.error(t('approve.reasonNeeded'));
-      document.querySelector<HTMLInputElement>('[data-testid="decision-apply-all-reason"]')?.focus();
+    if (errors.size) {
+      const first = drafts.findIndex(d => errors.has(d.lineId));
+      if (first >= 0) setActive(first);
       return;
     }
-    const decisions = rows.map(d => {
-      const v = dec.norm(qtys[d.lineId]!.trim());
-      return {
-        lineId: d.lineId, approve: b === 'approve' ? v : '0', hold: b === 'hold' ? v : '0', reject: b === 'reject' ? v : '0',
-        ...(reason ? { reason } : {}),
-        ...(d.values && Object.keys(d.values).length ? { values: d.values } : {}),
-      };
-    });
-    // Nothing is saved yet: the overview popup asks for confirmation first.
-    setConfirm({
-      kind: b, decisions, reason,
-      rows: rows.map(d => {
-        const l = lineById.get(d.lineId);
-        return { key: d.lineId, doc: doc.number ?? '', item: l ? lineItemLabel(l) : `#${d.lineNo}`, uom: l ? lineUom(l) : '', pending: d.pending, qty: dec.norm(qtys[d.lineId]!.trim()) };
-      }),
-    });
-  }, [busy, drafts, qtys, canExceed, bulkReason, lineById, doc.number]);
-
-  const [confirm, setConfirm] = useState<{ kind: Bucket; reason: string; rows: ConfirmRow[]; decisions: Extract<WorkflowActionInput, { action: 'decide' }>['decisions'] } | null>(null);
-  const send = useCallback(async () => {
-    if (!confirm) return;
-    const next = await run(`decide:${confirm.kind}`, { action: 'decide', stageKey: stage.key, decisions: confirm.decisions, ...(comment.trim() ? { comment: comment.trim() } : {}) });
-    const n = confirm.rows.length; const b = confirm.kind;
-    setConfirm(null);
+    if (!toSend) { toast(t('approve.nothingToSend')); return; }
+    const next = await run('decide', { action: 'decide', stageKey: stage.key, decisions: toDecisions(drafts), ...(comment.trim() ? { comment: comment.trim() } : {}) });
     if (next) {
-      setQtys({}); setBulkReason(''); setComment('');
-      toast.success(t(b === 'approve' ? 'approve.didApprove' : b === 'hold' ? 'approve.didHold' : 'approve.didReject', { n }));
+      setAttempted(false); setComment(''); setSelected(new Set());
+      toast.success(t('approve.done', { n: toSend }));
       afterAction(next);
     }
-  }, [confirm, run, stage.key, comment, afterAction]);
+  }, [busy, errors, drafts, toSend, run, stage.key, comment, afterAction]);
 
   const unhold = useCallback(async (lineIds: string[]) => {
     const next = await run(`unhold:${lineIds.join(',')}`, { action: 'unhold', stageKey: stage.key, lineIds });
     if (next) toast.success(t('approve.unheld', { n: lineIds.length }));
   }, [run, stage.key]);
 
-  // ------------------------------------------------------------------ keyboard (j/k move, e edit qty, ? help)
+  // ------------------------------------------------------------------ bulk
+  const targets = selected.size ? drafts.filter(d => selected.has(d.lineId)) : drafts;
+  const applyAll = (b: Bucket | 'skip') => {
+    const ids = new Set(targets.map(d => d.lineId));
+    setDrafts(ds => ds.map(d => {
+      if (!ids.has(d.lineId)) return d;
+      const n = b === 'skip' ? skip(d) : setWhole(d, b);
+      return (b === 'hold' || b === 'reject') && bulkReason.trim() && !n.reason.trim() ? { ...n, reason: bulkReason.trim() } : n;
+    }));
+  };
+
+  // ------------------------------------------------------------------ keyboard (j/k move, a/h/r/s set, x select, e edit, Enter submit, ? help)
   const listRef = useRef<HTMLDivElement>(null);
   const virtual = drafts.length > VIRTUAL_AFTER;
   const virtualizer = useVirtualizer({ count: drafts.length, getScrollElement: () => listRef.current, estimateSize: () => 76, overscan: 8, enabled: virtual });
@@ -239,24 +210,31 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
       if (document.querySelector('[role="dialog"]')) return;
       const el = e.target as HTMLElement | null;
       const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+      if (e.key === 'Enter' && (!typing || e.ctrlKey || (el?.tagName === 'INPUT' && el.dataset.submitOnEnter === 'true'))) { e.preventDefault(); void submit(); return; }
       if (typing) { if (e.key === 'Escape') { el!.blur(); } return; }
       const d = drafts[active];
       switch (e.key) {
         case 'j': case 'ArrowDown': e.preventDefault(); setActive(i => { const n = Math.min(drafts.length - 1, i + 1); focusRow(n); return n; }); break;
         case 'k': case 'ArrowUp': e.preventDefault(); setActive(i => { const n = Math.max(0, i - 1); focusRow(n); return n; }); break;
-        case 'e': if (d) { e.preventDefault(); document.querySelector<HTMLInputElement>(`[data-testid="decision-${d.lineNo}-qty"]`)?.select(); } break;
+        case 'a': if (d) { e.preventDefault(); update(d.lineId, x => setWhole(x, 'approve')); } break;
+        case 'h': if (d && actions.includes('hold')) { e.preventDefault(); update(d.lineId, x => setWhole(x, 'hold')); focusReason(d.lineNo); } break;
+        case 'r': if (d && actions.includes('reject')) { e.preventDefault(); update(d.lineId, x => setWhole(x, 'reject')); focusReason(d.lineNo); } break;
+        case 's': if (d) { e.preventDefault(); update(d.lineId, skip); } break;
+        case 'x': case ' ': if (d) { e.preventDefault(); setSelected(s => { const n = new Set(s); if (n.has(d.lineId)) n.delete(d.lineId); else n.add(d.lineId); return n; }); } break;
+        case 'e': if (d) { e.preventDefault(); document.querySelector<HTMLInputElement>(`[data-testid="decision-${d.lineNo}-approve"]`)?.select(); } break;
         case '?': e.preventDefault(); setDialog('help'); break;
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [dialog, drafts, active, focusRow]);
+  }, [dialog, drafts, active, submit, update, actions, focusRow]);
 
   const priorStages = (doc.workflow?.stages ?? []).filter(s => s.status === 'done' && (doc.workflow!.stages.findIndex(x => x.key === s.key) < doc.workflow!.stages.findIndex(x => x.key === stage.key)));
   const canSendBack = actions.includes('send_back') && allowed.has('send_back');
   const canForward = actions.includes('forward') && allowed.has('forward');
   const due = dueText(stage.dueAt, stage.overdue);
   const total = doc.values.total_amount;
+  const allSelected = selected.size > 0 && selected.size === drafts.length;
 
   const vItems = virtual ? virtualizer.getVirtualItems() : null;
 
@@ -278,27 +256,6 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
 
         {conflict && <InlineAlert tone="warning" className="mb-4" data-testid="approve-conflict">{conflict}</InlineAlert>}
 
-        {/* Item Wise / Doc Wise toggle — always visible above the decision area */}
-        <div className="mb-3 flex overflow-hidden rounded border border-border w-fit" role="group" aria-label="Granularity">
-          <button type="button"
-            onClick={() => setUserGranularity('line')}
-            aria-pressed={granularity === 'line'}
-            className={cn('px-4 py-1.5 text-sm font-semibold transition-colors', granularity === 'line' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}
-            data-testid="granularity-item-wise">
-            Item Wise
-          </button>
-          <button type="button"
-            onClick={() => setUserGranularity('document')}
-            aria-pressed={granularity === 'document'}
-            className={cn('border-l border-border px-4 py-1.5 text-sm font-semibold transition-colors', granularity === 'document' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}
-            data-testid="granularity-doc-wise">
-            Doc Wise
-          </button>
-        </div>
-
-        {/* Qty totals strip — always shown so user can see overall status at a glance */}
-        <QtySummaryStrip approved={lineQtySummary.approved} held={lineQtySummary.held} rejected={lineQtySummary.rejected} pending={lineQtySummary.pending} />
-
         {granularity === 'document' ? (
           <DocumentDecision doc={doc} stage={stage} actions={actions} busy={!!busy} onDecide={async (o, reason) => {
             const next = await run('decide', { action: 'decide', stageKey: stage.key, decisions: [], outcome: o, ...(reason ? { comment: reason } : {}) });
@@ -310,13 +267,17 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
           <Card className="overflow-hidden">
             {/* Toolbar: select all, apply to selected/all, shortcuts, send back, forward */}
             <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5" data-testid="decision-apply-all">
-              <span className="mr-1 text-sm text-fg-muted">{t('approve.typeQtyThen')}</span>
+              <label className="mr-1 flex items-center gap-2 text-sm">
+                <Checkbox checked={allSelected ? true : selected.size ? 'indeterminate' : false} onCheckedChange={v => setSelected(v ? new Set(drafts.map(d => d.lineId)) : new Set())} aria-label={t('approve.selectAll')} data-testid="decision-select-all" />
+                <span className="hidden text-fg-muted sm:inline">{selected.size ? t('approve.applyToN', { n: selected.size }) : t('approve.applyToAll')}</span>
+              </label>
               <div className="flex gap-1">
-                <QuickButton tone="approve" label={busy === 'decide:approve' ? '…' : t('approve.approve')} disabled={!!busy} onClick={() => void act('approve')} testId="decision-apply-all-approve" wide />
-                {actions.includes('hold') && <QuickButton tone="hold" label={busy === 'decide:hold' ? '…' : t('approve.hold')} disabled={!!busy} onClick={() => void act('hold')} testId="decision-apply-all-hold" wide />}
-                {actions.includes('reject') && <QuickButton tone="reject" label={busy === 'decide:reject' ? '…' : t('approve.reject')} disabled={!!busy} onClick={() => void act('reject')} testId="decision-apply-all-reject" wide />}
+                <QuickButton tone="approve" label={t('approve.approve')} onClick={() => applyAll('approve')} testId="decision-apply-all-approve" wide />
+                {actions.includes('hold') && <QuickButton tone="hold" label={t('approve.hold')} onClick={() => applyAll('hold')} testId="decision-apply-all-hold" wide />}
+                {actions.includes('reject') && <QuickButton tone="reject" label={t('approve.reject')} onClick={() => applyAll('reject')} testId="decision-apply-all-reject" wide />}
+                <Button variant="ghost" size="sm" onClick={() => applyAll('skip')} data-testid="decision-apply-all-skip">{t('approve.skip')}</Button>
               </div>
-              <Input value={bulkReason} onChange={e => setBulkReason(e.target.value)} placeholder={t('approve.reasonPlaceholder')} aria-label={t('approve.reasonPlaceholder')} className="h-8 w-full sm:w-64" data-testid="decision-apply-all-reason" />
+              <Input value={bulkReason} onChange={e => setBulkReason(e.target.value)} placeholder={t('approve.bulkReason')} aria-label={t('approve.bulkReason')} className="h-8 w-full sm:w-56" data-testid="decision-apply-all-reason" />
               <div className="ml-auto flex items-center gap-1">
                 <Button variant="ghost" size="sm" onClick={() => setDialog('help')} className="hidden md:inline-flex" aria-keyshortcuts="?" data-testid="decision-help-open"><Keyboard aria-hidden />{t('approve.shortcuts')}</Button>
                 {canSendBack && <Button variant="secondary" size="sm" onClick={() => setDialog('send_back')} data-testid="send-back"><Undo2 aria-hidden />{t('approve.sendBack.button')}</Button>}
@@ -325,9 +286,9 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
             </div>
 
             {/* Column header (wide screens) */}
-            <div className="hidden grid-cols-[2.25rem_minmax(10rem,1fr)_7rem_10rem] items-center gap-x-3 border-b border-border bg-subtle px-3 py-2 text-sm font-medium text-fg-muted md:grid" aria-hidden>
-              <span className="text-right">#</span><span>{t('docs.col.item')}</span><span className="text-right">{t('approve.pendingHere')}</span>
-              <span className="text-right">{t('approve.qtyToAct')}</span>
+            <div className="hidden grid-cols-[2rem_2.25rem_minmax(10rem,1fr)_7rem_7.5rem_7.5rem_7.5rem_8.5rem] items-center gap-x-3 border-b border-border bg-subtle px-3 py-2 text-sm font-medium text-fg-muted md:grid" aria-hidden>
+              <span /><span className="text-right">#</span><span>{t('docs.col.item')}</span><span className="text-right">{t('approve.pendingHere')}</span>
+              <span className="text-right text-success">{t('approve.approve')}</span><span className="text-right text-warning">{t('approve.hold')}</span><span className="text-right text-danger">{t('approve.reject')}</span><span />
             </div>
 
             <div ref={listRef} role="list" aria-label={t('approve.linesLabel')} className={cn(virtual && 'overflow-y-auto')} style={virtual ? { maxHeight: 'calc(100dvh - 22rem)', minHeight: 320 } : undefined}>
@@ -337,15 +298,15 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
                     const d = drafts[vi.index]!;
                     return (
                       <div key={d.lineId} ref={virtualizer.measureElement} data-index={vi.index} className="absolute inset-x-0" style={{ transform: `translateY(${vi.start}px)` }}>
-                        <DecisionRow d={d} line={lineById.get(d.lineId)!} index={vi.index} active={vi.index === active} value={qtys[d.lineId] ?? ''} canExceed={canExceed}
-                          editable={editable} onActivate={setActive} onUpdate={update} onQty={onQty} />
+                        <DecisionRow d={d} line={lineById.get(d.lineId)!} index={vi.index} active={vi.index === active} selected={selected.has(d.lineId)} error={errors.get(d.lineId) ?? null}
+                          showErrors={attempted} actions={actions} editable={editable} onActivate={setActive} onUpdate={update} onToggle={onToggle} />
                       </div>
                     );
                   })}
                 </div>
               ) : drafts.map((d, i) => (
-                <DecisionRow key={d.lineId} d={d} line={lineById.get(d.lineId)!} index={i} active={i === active} value={qtys[d.lineId] ?? ''} canExceed={canExceed}
-                  editable={editable} onActivate={setActive} onUpdate={update} onQty={onQty} />
+                <DecisionRow key={d.lineId} d={d} line={lineById.get(d.lineId)!} index={i} active={i === active} selected={selected.has(d.lineId)} error={errors.get(d.lineId) ?? null}
+                  showErrors={attempted} actions={actions} editable={editable} onActivate={setActive} onUpdate={update} onToggle={onToggle} />
               ))}
             </div>
 
@@ -364,10 +325,20 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
         )}
       </div>
 
-      {confirm && (
-        <ConfirmDecisionDialog kind={confirm.kind} rows={confirm.rows} reason={confirm.reason} busy={!!busy}
-          onCancel={() => setConfirm(null)} onConfirm={() => void send()} />
+      {granularity === 'line' && drafts.length > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-bg/95 backdrop-blur lg:left-[var(--sidebar-w)]" data-testid="decision-summary-bar">
+          <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-6">
+            <p className="min-w-0 flex-1 text-sm" aria-live="polite" data-testid="decision-summary">
+              <SummaryText s={summary} />
+              {attempted && errors.size > 0 && <span className="ml-2 font-medium text-danger" data-testid="decision-errors">{t('approve.fixLines', { n: errors.size })}</span>}
+            </p>
+            <Button size="lg" className="w-full sm:w-auto" onClick={() => void submit()} loading={busy === 'decide'} disabled={!!busy || !toSend} aria-keyshortcuts="Enter" data-testid="decision-submit">
+              {t('approve.submit', { n: toSend })}
+            </Button>
+          </div>
+        </div>
       )}
+
       {dialog === 'help' && <ShortcutsDialog onClose={() => setDialog(null)} />}
       {dialog === 'send_back' && (
         <SendBackDialog targets={priorStages.map(s => ({ key: s.key, name: s.name }))} onClose={() => setDialog(null)}
@@ -389,41 +360,27 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
   );
 }
 
-/** Compact banner showing total approved/held/rejected/pending across all doc lines. */
-function QtySummaryStrip({ approved, held, rejected, pending }: { approved: string; held: string; rejected: string; pending: string }) {
-  const hasAny = dec.gt0(approved) || dec.gt0(held) || dec.gt0(rejected) || dec.gt0(pending);
-  if (!hasAny) return null;
+const toggleSel = (set: Dispatch<SetStateAction<Set<string>>>) => (id: string) =>
+  set(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
+function focusReason(lineNo: number) {
+  requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`[data-testid="decision-${lineNo}-reason"]`)?.focus());
+}
+
+function SummaryText({ s }: { s: ReturnType<typeof summarize> }) {
+  const parts: { text: string; cls: string }[] = [];
+  if (s.approve) parts.push({ text: t('approve.sum.approve', { n: s.approve }), cls: 'text-success' });
+  if (s.hold) parts.push({ text: t('approve.sum.hold', { n: s.hold }), cls: 'text-warning' });
+  if (s.reject) parts.push({ text: t('approve.sum.reject', { n: s.reject }), cls: 'text-danger' });
+  for (const [u, q] of Object.entries(s.reducedQty)) parts.push({ text: t('approve.sum.reduced', { qty: `${fmtQty(q)}${u ? ` ${u}` : ''}` }), cls: 'text-danger' });
+  if (s.skip) parts.push({ text: t('approve.sum.skip', { n: s.skip }), cls: 'text-fg-muted' });
+  if (!parts.length) return <span className="text-fg-muted">{t('approve.sum.none')}</span>;
   return (
-    <div className="mb-4 flex flex-wrap gap-x-5 gap-y-1.5 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm" data-testid="approve-qty-summary">
-      {dec.gt0(approved) && (
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-success" aria-hidden />
-          <span className="text-fg-muted">Approved</span>
-          <span className="font-semibold tabular-nums text-success">{fmtQty(approved)}</span>
-        </span>
-      )}
-      {dec.gt0(held) && (
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-warning-bar" aria-hidden />
-          <span className="text-fg-muted">Held</span>
-          <span className="font-semibold tabular-nums text-warning">{fmtQty(held)}</span>
-        </span>
-      )}
-      {dec.gt0(rejected) && (
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-danger" aria-hidden />
-          <span className="text-fg-muted">Rejected</span>
-          <span className="font-semibold tabular-nums text-danger">{fmtQty(rejected)}</span>
-        </span>
-      )}
-      {dec.gt0(pending) && (
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-fg-subtle" aria-hidden />
-          <span className="text-fg-muted">Pending</span>
-          <span className="font-semibold tabular-nums">{fmtQty(pending)}</span>
-        </span>
-      )}
-    </div>
+    <>
+      {parts.map((p, i) => (
+        <span key={i}>{i > 0 && <span className="mx-1.5 text-fg-subtle" aria-hidden>·</span>}<span className={cn('font-medium', p.cls)}>{p.text}</span></span>
+      ))}
+    </>
   );
 }
 
@@ -448,198 +405,105 @@ function QuickButton({ tone, label, onClick, pressed, testId, wide, disabled, sh
   );
 }
 
-// ------------------------------------------------------------------------------------------------ item context panel
-
-type ContextSection = 'indent' | 'po' | 'inventory';
-
-export function ItemContextPanel({ itemId, uom, indent = true }: { itemId: string; uom: string; indent?: boolean }) {
-  const [open, setOpen] = useState<ContextSection | null>(null);
-
-  const indents = useQuery({
-    queryKey: ['item-ctx', 'indent', itemId],
-    queryFn: () => docsApi.list('indent', { view: 'document', item: itemId }, null, 5),
-    enabled: open === 'indent',
-    staleTime: 60_000,
-  });
-  const pos = useQuery({
-    queryKey: ['item-ctx', 'purchase_order', itemId],
-    queryFn: () => docsApi.list('purchase_order', { view: 'document', item: itemId }, null, 5),
-    enabled: open === 'po',
-    staleTime: 60_000,
-  });
-  const inv = useQuery({
-    queryKey: stockKeys.summary(itemId),
-    queryFn: () => stockApi.summary(itemId),
-    enabled: open === 'inventory',
-    staleTime: 60_000,
-  });
-
-  const toggle = (s: ContextSection) => setOpen(o => o === s ? null : s);
-
-  const SectionBtn = ({ id, icon, label }: { id: ContextSection; icon: React.ReactNode; label: string }) => (
-    <button type="button" onClick={e => { e.stopPropagation(); toggle(id); }}
-      className={cn('inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition-colors',
-        open === id ? 'border-accent bg-accent text-white' : 'border-border bg-surface text-fg-muted hover:bg-subtle hover:text-fg')}
-      aria-expanded={open === id}>
-      {icon}{label}{open === id ? <ChevronUp className="size-3" aria-hidden /> : <ChevronDown className="size-3" aria-hidden />}
-    </button>
-  );
-
-  const DocTable = ({ rows, loading }: { rows: DocListRow[] | undefined; loading: boolean }) => {
-    if (loading) return <p className="py-3 text-center text-xs text-fg-muted">Loading…</p>;
-    if (!rows?.length) return <p className="py-3 text-center text-xs text-fg-muted">No records found.</p>;
-    return (
-      <table className="w-full text-xs">
-        <thead><tr className="border-b border-border bg-muted/60 text-left text-fg-muted">
-          <th className="px-3 py-1.5 font-medium">#</th>
-          <th className="px-3 py-1.5 font-medium">Number</th>
-          <th className="px-3 py-1.5 font-medium">Date</th>
-          <th className="px-3 py-1.5 font-medium">Status</th>
-          <th className="px-3 py-1.5 font-medium">Location</th>
-          <th className="px-3 py-1.5 font-medium text-right">Amount</th>
-        </tr></thead>
-        <tbody className="divide-y divide-border">
-          {rows.map((r, i) => (
-            <tr key={r.id} className="hover:bg-muted/40">
-              <td className="px-3 py-1.5 tabular-nums text-fg-muted">{i + 1}</td>
-              <td className="px-3 py-1.5 font-medium text-fg">{r.number ?? '—'}</td>
-              <td className="px-3 py-1.5 tabular-nums text-fg-muted whitespace-nowrap">{new Date(r.docDate).toLocaleDateString()}</td>
-              <td className="px-3 py-1.5"><span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', r.statusKey === 'approved' || r.statusKey === 'completed' ? 'bg-success/15 text-success' : r.statusKey === 'rejected' || r.statusKey === 'cancelled' ? 'bg-danger/15 text-danger' : r.statusKey === 'hold' ? 'bg-warning/15 text-warning' : 'bg-muted text-fg-muted')}>{r.statusLabel}</span></td>
-              <td className="px-3 py-1.5 text-fg-muted">{r.location.name}</td>
-              <td className="px-3 py-1.5 tabular-nums text-right text-fg">{r.totalAmount ? fmtQty(r.totalAmount) : '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
-  };
-
+/** Proportions of approve / hold / reject over the pending qty; empty = left pending. */
+function SplitBar({ d }: { d: LineDraft }) {
+  const pa = dec.pct(d.approve, d.pending); const ph = dec.pct(d.hold, d.pending); const pr = dec.pct(d.reject, d.pending);
+  const empty = pa + ph + pr === 0;
   return (
-    <div className={cn('mt-2', indent && 'md:ml-[calc(2.25rem+0.75rem)]')}>
-      <div className="flex flex-wrap gap-2">
-        <SectionBtn id="indent" icon={<Package className="size-3" aria-hidden />} label="Last 5 Indents" />
-        <SectionBtn id="po" icon={<ShoppingCart className="size-3" aria-hidden />} label="Last 5 POs" />
-        <SectionBtn id="inventory" icon={<Package className="size-3" aria-hidden />} label="Inventory" />
-      </div>
-
-      {open === 'indent' && (
-        <div className="mt-1.5 overflow-hidden rounded border border-border bg-subtle">
-          <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted">Last 5 Indents for this Item</div>
-          <DocTable rows={indents.data?.data as DocListRow[] | undefined} loading={indents.isLoading} />
-        </div>
-      )}
-
-      {open === 'po' && (
-        <div className="mt-1.5 overflow-hidden rounded border border-border bg-subtle">
-          <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted">Last 5 Purchase Orders for this Item</div>
-          <DocTable rows={pos.data?.data as DocListRow[] | undefined} loading={pos.isLoading} />
-        </div>
-      )}
-
-      {open === 'inventory' && (
-        <div className="mt-1.5 overflow-hidden rounded border border-border bg-subtle">
-          <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted">Inventory Summary</div>
-          {inv.isLoading ? (
-            <p className="py-3 text-center text-xs text-fg-muted">Loading…</p>
-          ) : !inv.data ? (
-            <p className="py-3 text-center text-xs text-fg-muted">No inventory data found.</p>
-          ) : (
-            <div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-b border-border px-3 py-2 text-xs sm:grid-cols-4">
-                <div><p className="text-fg-muted">Available</p><p className="font-semibold text-success tabular-nums">{fmtQty(inv.data.totals.available)} {uom}</p></div>
-                <div><p className="text-fg-muted">Quarantine</p><p className="font-semibold text-warning tabular-nums">{fmtQty(inv.data.totals.quarantine)} {uom}</p></div>
-                <div><p className="text-fg-muted">Open PO Qty</p><p className="font-semibold tabular-nums text-fg">{fmtQty(inv.data.totals.openPoQty)} {uom}</p></div>
-                <div><p className="text-fg-muted">Pending Issue</p><p className="font-semibold tabular-nums text-fg">{fmtQty(inv.data.totals.pendingIssueQty)} {uom}</p></div>
-              </div>
-              {inv.data.nodes.length > 0 && (
-                <table className="w-full text-xs">
-                  <thead><tr className="border-b border-border bg-muted/60 text-left text-fg-muted">
-                    <th className="px-3 py-1.5 font-medium">Location</th>
-                    <th className="px-3 py-1.5 font-medium text-right text-success">Available</th>
-                    <th className="px-3 py-1.5 font-medium text-right text-warning">Quarantine</th>
-                    <th className="px-3 py-1.5 font-medium text-right">Open PO</th>
-                    <th className="px-3 py-1.5 font-medium text-right">Pending Issue</th>
-                    <th className="px-3 py-1.5 font-medium text-right">Avg Cost</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-border">
-                    {inv.data.nodes.map(n => (
-                      <tr key={n.node.id} className="hover:bg-muted/40">
-                        <td className="px-3 py-1.5 font-medium text-fg">{n.node.name}</td>
-                        <td className="px-3 py-1.5 tabular-nums text-right text-success">{fmtQty(n.available)}</td>
-                        <td className="px-3 py-1.5 tabular-nums text-right text-warning">{fmtQty(n.quarantine)}</td>
-                        <td className="px-3 py-1.5 tabular-nums text-right text-fg">{fmtQty(n.openPoQty)}</td>
-                        <td className="px-3 py-1.5 tabular-nums text-right text-fg">{fmtQty(n.pendingIssueQty)}</td>
-                        <td className="px-3 py-1.5 tabular-nums text-right text-fg-muted">{n.avgCost ? fmtQty(n.avgCost) : '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+    <div className={cn('flex h-1.5 w-full overflow-hidden rounded-full', empty ? 'bg-[repeating-linear-gradient(45deg,rgb(var(--c-border))_0_4px,transparent_4px_8px)]' : 'bg-muted')} aria-hidden>
+      <span className={TONE.approve.bar} style={{ width: `${Math.min(100, pa)}%` }} />
+      <span className={TONE.hold.bar} style={{ width: `${Math.min(100, ph)}%` }} />
+      <span className={TONE.reject.bar} style={{ width: `${Math.min(100, pr)}%` }} />
     </div>
   );
 }
 
-// ------------------------------------------------------------------------------------------------ decision row with history
+const ERR_KEY: Record<DraftError, Parameters<typeof t>[0]> = {
+  number: 'approve.err.number', sum: 'approve.err.sum', reason: 'approve.err.reason', hold_not_allowed: 'approve.err.holdNotAllowed',
+  reject_not_allowed: 'approve.err.rejectNotAllowed', partial_not_allowed: 'approve.err.partialNotAllowed',
+};
 
-const DecisionRow = memo(function DecisionRow({ d, line, index, active, value, canExceed, editable, onActivate, onUpdate, onQty }: {
-  d: LineDraft; line: DocumentLineRow; index: number; active: boolean; value: string; canExceed: boolean; editable: string[];
-  onActivate: (i: number) => void; onUpdate: (lineId: string, fn: (d: LineDraft) => LineDraft) => void; onQty: (lineId: string, v: string) => void;
+const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected, error, showErrors, actions, editable, onActivate, onUpdate, onToggle }: {
+  d: LineDraft; line: DocumentLineRow; index: number; active: boolean; selected: boolean; error: DraftError | null; showErrors: boolean;
+  actions: readonly string[]; editable: string[];
+  onActivate: (i: number) => void; onUpdate: (lineId: string, fn: (d: LineDraft) => LineDraft) => void; onToggle: (id: string) => void;
 }) {
+  const o = outcome(d);
   const uom = lineUom(line);
+  const reduced = dec.gt0(d.approve) && dec.gt0(d.reject);
+  // Sum errors show live (they are about the numbers just typed); missing reasons once the user tries to submit.
+  const visibleError = error && (error !== 'reason' || showErrors) ? error : null;
+  const sumOff = error === 'sum' || error === 'number';
   const id = `dec-${d.lineNo}`;
-  const typed = value.trim() !== '';
-  const bad = typed && (!isDecimal(value) || !dec.gt0(value));
-  const over = typed && !bad && dec.cmp(value, d.pending) > 0;
-  const original = typeof line.values.qty === 'string' || typeof line.values.qty === 'number' ? String(line.values.qty) : null;
-  const added = original && isDecimal(original) && dec.cmp(line.qty.requested, original) > 0 ? dec.sub(line.qty.requested, original) : null;
-
+  const qtyInput = (b: Bucket) => {
+    const disabled = (b === 'hold' && !actions.includes('hold')) || (b === 'reject' && !actions.includes('reject'));
+    const label = t(`approve.${b}`);
+    return (
+      <div className="min-w-0">
+        <label htmlFor={`${id}-${b}`} className={cn('mb-1 block text-xs font-medium md:sr-only', b === 'approve' ? 'text-success' : b === 'hold' ? 'text-warning' : 'text-danger')}>{label}</label>
+        <Input
+          id={`${id}-${b}`}
+          inputMode="decimal"
+          autoComplete="off"
+          value={d[b]}
+          disabled={disabled}
+          onFocus={e => { onActivate(index); e.currentTarget.select(); }}
+          onChange={e => onUpdate(d.lineId, x => setQty(x, b, e.target.value.replace(/[^\d.]/g, '')))}
+          aria-invalid={sumOff || undefined}
+          aria-describedby={visibleError ? `${id}-err` : undefined}
+          aria-label={t('approve.qtyLabel', { what: label, n: d.lineNo })}
+          className={cn('h-11 text-right tabular-nums md:h-8', sumOff && 'border-danger')}
+          data-testid={`decision-${d.lineNo}-${b}`}
+        />
+      </div>
+    );
+  };
 
   return (
-    <div role="listitem" data-row-index={index} data-testid={`decision-row-${d.lineNo}`} onClick={() => onActivate(index)}
+    <div role="listitem" data-row-index={index} data-testid={`decision-row-${d.lineNo}`} data-outcome={o} onClick={() => onActivate(index)}
       className={cn(
         'relative border-b border-border px-3 py-3 last:border-b-0 md:py-2',
         active ? 'bg-accent-soft/60 shadow-[inset_3px_0_0_rgb(var(--c-accent))]' : 'hover:bg-subtle',
+        o === 'skip' && 'bg-subtle/60',
       )}>
-      <div className="grid grid-cols-[1fr_auto] items-start gap-x-3 gap-y-3 md:grid-cols-[2.25rem_minmax(10rem,1fr)_7rem_10rem] md:items-center">
+      <div className="grid grid-cols-[2rem_1fr_auto] items-start gap-x-3 gap-y-3 md:grid-cols-[2rem_2.25rem_minmax(10rem,1fr)_7rem_7.5rem_7.5rem_7.5rem_8.5rem] md:items-center">
+        <div className="pt-0.5 md:pt-0"><Checkbox checked={selected} onCheckedChange={() => onToggle(d.lineId)} aria-label={t('approve.selectLine', { n: d.lineNo })} data-testid={`decision-${d.lineNo}-select`} /></div>
         <span className="hidden text-right text-sm text-fg-subtle tabular-nums md:block">{d.lineNo}</span>
         <div className="min-w-0">
           <p className="truncate font-medium"><span className="mr-1.5 text-sm font-normal text-fg-subtle md:hidden">{d.lineNo}</span>{lineItemLabel(line)}</p>
-          <p className="text-xs text-fg-subtle">
-            {t('approve.requested', { qty: `${fmtQty(original && isDecimal(original) ? original : line.qty.requested)} ${uom}`.trim() })}
-            {added && <span className="ml-1.5 font-medium text-accent" data-testid={`decision-${d.lineNo}-added`}>{t('approve.addedAtApproval', { qty: fmtQty(added) })}</span>}
-          </p>
+          <p className="text-xs text-fg-subtle">{t('approve.requested', { qty: `${fmtQty(line.qty.requested)} ${uom}`.trim() })}</p>
+          <div className="mt-1.5 max-w-56"><SplitBar d={d} /></div>
         </div>
         <div className="text-right">
           <p className="text-lg font-semibold tabular-nums md:text-base" data-testid={`qty-pending-${d.lineNo}`} data-value={d.pending}>{fmtQty(d.pending)}</p>
           <p className="text-xs text-fg-subtle md:hidden">{uom || t('approve.pendingHere')}</p>
         </div>
-        <div className="col-span-2 md:col-span-1">
-          <label htmlFor={`${id}-qty`} className="mb-1 block text-xs font-medium text-fg-muted md:sr-only">{t('approve.qtyToAct')}</label>
-          <Input
-            id={`${id}-qty`}
-            inputMode="decimal"
-            autoComplete="off"
-            placeholder="0"
-            value={value}
-            onFocus={() => onActivate(index)}
-            onChange={e => onQty(d.lineId, e.target.value)}
-            aria-invalid={bad || undefined}
-            aria-label={t('approve.qtyLabel', { what: t('approve.qtyToAct'), n: d.lineNo })}
-            className={cn('h-11 text-right tabular-nums md:h-8', bad && 'border-danger')}
-            data-testid={`decision-${d.lineNo}-qty`}
-          />
-          {over && <p className={cn('mt-1 text-right text-xs', canExceed ? 'text-accent' : 'text-danger')} data-testid={`decision-${d.lineNo}-over`}>
-            {canExceed ? t('approve.overHint', { qty: fmtQty(dec.sub(value, d.pending)) }) : t('approve.overPendingShort', { pending: fmtQty(d.pending) })}
-          </p>}
+        <div className="order-last col-span-3 grid grid-cols-3 gap-2 md:order-none md:col-span-1 md:contents">
+          {qtyInput('approve')}
+          {qtyInput('hold')}
+          {qtyInput('reject')}
+        </div>
+        <div className="col-span-3 flex gap-2 md:col-span-1 md:justify-end md:gap-1">
+          <QuickButton tone="approve" label={t('approve.approve')} short="A" pressed={o === 'approve'} onClick={() => onUpdate(d.lineId, x => setWhole(x, 'approve'))} testId={`decision-${d.lineNo}-set-approve`} />
+          <QuickButton tone="hold" label={t('approve.hold')} short="H" pressed={o === 'hold'} disabled={!actions.includes('hold')} onClick={() => { onUpdate(d.lineId, x => setWhole(x, 'hold')); focusReason(d.lineNo); }} testId={`decision-${d.lineNo}-set-hold`} />
+          <QuickButton tone="reject" label={t('approve.reject')} short="R" pressed={o === 'reject'} disabled={!actions.includes('reject')} onClick={() => { onUpdate(d.lineId, x => setWhole(x, 'reject')); focusReason(d.lineNo); }} testId={`decision-${d.lineNo}-set-reject`} />
         </div>
       </div>
 
-      {editable.length > 0 && (
-        <div className="mt-2 space-y-2 md:ml-[calc(2.25rem+0.75rem)]">
+      {(needsReason(d) || o === 'skip' || visibleError || editable.length > 0) && (
+        <div className="mt-2 space-y-2 md:ml-[calc(4.25rem+1.5rem)]">
+          {o === 'skip' && <p className="flex items-center gap-1.5 text-xs text-fg-muted"><CircleSlash className="size-3.5" aria-hidden />{t('approve.leftPending')}</p>}
+          {needsReason(d) && (
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+              <label htmlFor={`${id}-reason`} className="shrink-0 text-xs font-medium text-fg-muted">
+                {reduced ? t('approve.reasonReduce', { qty: `${fmtQty(d.reject)} ${uom}`.trim() }) : dec.gt0(d.hold) && !dec.gt0(d.reject) ? t('approve.reasonHold') : t('approve.reasonReject')}
+              </label>
+              <Input id={`${id}-reason`} value={d.reason} maxLength={500} onFocus={() => onActivate(index)}
+                onChange={e => onUpdate(d.lineId, x => ({ ...x, reason: e.target.value }))}
+                aria-invalid={(visibleError === 'reason') || undefined} data-submit-on-enter="true"
+                className={cn('h-10 md:h-8', visibleError === 'reason' && 'border-danger')} data-testid={`decision-${d.lineNo}-reason`} />
+            </div>
+          )}
           {editable.map(f => (
             <div key={f} className="flex items-center gap-2">
               <label htmlFor={`${id}-f-${f}`} className="w-28 shrink-0 text-xs font-medium text-fg-muted">{f}</label>
@@ -647,90 +511,12 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, value, c
                 onChange={e => onUpdate(d.lineId, x => ({ ...x, values: { ...(x.values ?? {}), [f]: e.target.value } }))} data-testid={`decision-${d.lineNo}-field-${f}`} />
             </div>
           ))}
+          {visibleError && <p id={`${id}-err`} role="alert" className="text-xs font-medium text-danger" data-testid={`decision-${d.lineNo}-error`}>{t(ERR_KEY[visibleError], { pending: fmtQty(d.pending) })}</p>}
         </div>
       )}
-
-      {/* Item context: last indents, POs, inventory */}
-      {typeof line.values.item === 'string' && line.values.item && (
-        <ItemContextPanel itemId={line.values.item} uom={lineUom(line)} />
-      )}
-
-      <LineHistory line={line} lineNo={d.lineNo} />
     </div>
   );
 });
-
-/** Per-line approval history (who decided what, qty, remarks), collapsed by default. */
-export function LineHistory({ line, lineNo, indent = true }: { line: DocumentLineRow; lineNo: number; indent?: boolean }) {
-  const [histOpen, setHistOpen] = useState(false);
-  const lineHistory = useMemo(() => {
-    const hist = (line as unknown as { history?: TimelineEntry[] }).history ?? [];
-    return hist.filter(e => e.kind === 'workflow');
-  }, [line]);
-  return (
-      <div className={cn('mt-2', indent && 'md:ml-[calc(2.25rem+0.75rem)]')}>
-        <button type="button" onClick={e => { e.stopPropagation(); setHistOpen(v => !v); }}
-          className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg"
-          aria-expanded={histOpen} data-testid={`decision-${lineNo}-history-toggle`}>
-          {histOpen ? <ChevronUp className="size-3" aria-hidden /> : <ChevronDown className="size-3" aria-hidden />}
-          History
-        </button>
-        {histOpen && (
-          <div className="mt-1.5 rounded border border-border bg-subtle overflow-hidden" data-testid={`decision-${lineNo}-history`}>
-            <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted border-b border-border bg-muted/40">
-              History — {lineItemLabel(line)}
-            </div>
-            {lineHistory.length === 0 ? (
-              <p className="py-3 text-center text-xs text-fg-muted">No history yet.</p>
-            ) : (
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border bg-muted/60 text-left text-fg-muted">
-                    <th className="px-3 py-1.5 font-medium">#</th>
-                    <th className="px-3 py-1.5 font-medium">Date &amp; Time</th>
-                    <th className="px-3 py-1.5 font-medium">Action By</th>
-                    <th className="px-3 py-1.5 font-medium">Role</th>
-                    <th className="px-3 py-1.5 font-medium">Action</th>
-                    <th className="px-3 py-1.5 font-medium">Qty</th>
-                    <th className="px-3 py-1.5 font-medium">Remarks</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {lineHistory.map((entry, idx) => {
-                    const ld = entry.lineDecisions?.find((x: { lineNo: number }) => x.lineNo === lineNo);
-                    const actionQty = ld ? [
-                      ld.approve && `${fmtQty(ld.approve)} ✓`,
-                      ld.hold && `${fmtQty(ld.hold)} ⏸`,
-                      ld.reject && `${fmtQty(ld.reject)} ✕`,
-                    ].filter(Boolean).join(', ') : '—';
-                    const actionLabel = ld?.approve && !ld?.reject && !ld?.hold ? 'Approved'
-                      : ld?.hold && !ld?.approve && !ld?.reject ? 'On Hold'
-                      : ld?.reject && !ld?.approve && !ld?.hold ? 'Rejected'
-                      : entry.kind === 'workflow' ? 'Decision' : entry.kind;
-                    const actionCls = ld?.approve && !ld?.reject && !ld?.hold ? 'text-success'
-                      : ld?.hold && !ld?.reject ? 'text-warning'
-                      : ld?.reject ? 'text-danger'
-                      : 'text-fg-muted';
-                    return (
-                      <tr key={entry.id} className="hover:bg-muted/40">
-                        <td className="px-3 py-1.5 tabular-nums text-fg-muted">{idx + 1}</td>
-                        <td className="px-3 py-1.5 tabular-nums text-fg-muted whitespace-nowrap">{new Date(entry.at).toLocaleString()}</td>
-                        <td className="px-3 py-1.5 font-medium text-fg">{entry.actor?.name ?? '—'}</td>
-                        <td className="px-3 py-1.5 text-fg-muted">{(entry.actor as { role?: string } | undefined)?.role ?? '—'}</td>
-                        <td className={cn('px-3 py-1.5 font-medium', actionCls)}>{actionLabel}</td>
-                        <td className="px-3 py-1.5 tabular-nums text-fg">{actionQty}</td>
-                        <td className="px-3 py-1.5 text-fg-muted italic max-w-[200px] truncate">{ld?.reason ?? entry.detail ?? '—'}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-      </div>
-  );
-}
 
 // ------------------------------------------------------------------------------------------------ held lines
 

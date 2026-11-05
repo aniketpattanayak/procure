@@ -234,7 +234,7 @@ export function IndentLineStockBar({ itemId, locationId }: { itemId: string | un
                   {locationId && locationFilter && (
                     <div className="rounded border border-border bg-subtle px-2.5 py-1.5">
                       <div className="text-fg-subtle mb-0.5">Location</div>
-                      <div className="text-sm font-medium text-fg">{stock.data?.nodes.find(n => n.node.id === locationId)?.node.name ?? 'Selected location'}</div>
+                      <div className="text-sm font-medium text-fg">{stock.data?.nodes.find(n => n.node.id === locationId)?.node.name ?? 'This location'}</div>
                     </div>
                   )}
                 </>
@@ -247,7 +247,7 @@ export function IndentLineStockBar({ itemId, locationId }: { itemId: string | un
             <div>
               <div className="flex items-center justify-between mb-1">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-fg-muted">Recent Indents</p>
-                <Link href={`/docs/indent?item=${itemId}`} className="text-accent hover:underline text-[10px]" target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>View all →</Link>
+                <Link href={`/docs/indent?item=${itemId}`} className="text-accent hover:underline text-[10px]" onClick={e => e.stopPropagation()}>View all →</Link>
               </div>
               {indentListQ.isLoading ? <Skeleton className="h-4 w-full" /> : indentList.length ? (
                 <ul className="space-y-1">
@@ -269,7 +269,7 @@ export function IndentLineStockBar({ itemId, locationId }: { itemId: string | un
             <div>
               <div className="flex items-center justify-between mb-1">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-fg-muted">Recent Purchase Orders</p>
-                <Link href={`/docs/po?item=${itemId}`} className="text-accent hover:underline text-[10px]" target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>View all →</Link>
+                <Link href={`/docs/po?item=${itemId}`} className="text-accent hover:underline text-[10px]" onClick={e => e.stopPropagation()}>View all →</Link>
               </div>
               {poListQ.isLoading ? <Skeleton className="h-4 w-full" /> : poList.length ? (
                 <ul className="space-y-1">

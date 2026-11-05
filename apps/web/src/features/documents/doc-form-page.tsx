@@ -28,7 +28,6 @@ import { DocStatusBadge } from './status';
 import { docExtension } from './extensions';
 import './extensions-installed';
 import { IndentLineStockBar } from '@/features/procurement/doc-extensions';
-import { IssueLineStockBar } from '@/features/stock/doc-extensions';
 
 const FormRenderer = dynamic(() => import('@/engines/form-renderer/form-renderer').then(m => m.FormRenderer), {
   ssr: false,
@@ -182,20 +181,14 @@ function DocForm({ docType, doc, header, line }: { docType: DocTypeSummary; doc:
           onEvaluate={setEvaluation}
           gridTestIds={LINE_TEST_IDS}
           idPrefix="doc"
-          lineExtra={
-            type === 'indent'
-              ? (gridKey, row) => gridKey === LINES_KEY
-                ? <IndentLineStockBar
-                    itemId={typeof row.item === 'string' ? row.item : undefined}
-                    locationId={typeof values.location === 'string' ? values.location : undefined}
-                  />
-                : null
-              : type === 'store_issue'
-                ? (gridKey, row) => gridKey === LINES_KEY
-                  ? <IssueLineStockBar itemId={typeof row.item === 'string' ? row.item : undefined} />
-                  : null
-                : undefined
-          }
+          lineExtra={type === 'indent'
+            ? (gridKey, row) => gridKey === LINES_KEY
+              ? <IndentLineStockBar
+                  itemId={typeof row.item === 'string' ? row.item : undefined}
+                  locationId={typeof values.location === 'string' ? values.location : undefined}
+                />
+              : null
+            : undefined}
         />
       </Card>
 

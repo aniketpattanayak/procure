@@ -20,7 +20,7 @@ export type ReorderRuleBody = z.input<typeof ReorderRuleInput>;
 export type CountSnapshotBody = z.input<typeof CountSnapshotInput>;
 
 export interface BalanceQuery {
-  node?: string; includeChildren?: boolean; item?: string; q?: string; status?: StockStatus; byBatch?: boolean; belowMin?: boolean; combine?: boolean;
+  node?: string; includeChildren?: boolean; item?: string; q?: string; status?: StockStatus; byBatch?: boolean; belowMin?: boolean;
   expiringWithinDays?: number;
 }
 export interface LedgerQuery {
@@ -92,7 +92,7 @@ const page = (cursor: string | null | undefined, limit: number) => ({ cursor: cu
 export const stockApi = {
   balances: (q: BalanceQuery, cursor: string | null, limit = 100) => http.get<Page<StockBalanceRow>>('/stock/balances', {
     node: q.node, includeChildren: bool(q.includeChildren), item: q.item, q: q.q?.trim() || undefined, status: q.status,
-    byBatch: bool(q.byBatch), belowMin: bool(q.belowMin), combine: bool(q.combine), expiringWithinDays: q.expiringWithinDays, ...page(cursor, limit),
+    byBatch: bool(q.byBatch), belowMin: bool(q.belowMin), expiringWithinDays: q.expiringWithinDays, ...page(cursor, limit),
   }),
   ledger: (q: LedgerQuery, cursor: string | null, limit = 100) => http.get<Page<StockLedgerRow>>('/stock/ledger', {
     item: q.item, node: q.node, includeChildren: bool(q.includeChildren), from: q.from, to: q.to, movementType: q.movementType, document: q.document,

@@ -11,7 +11,6 @@ import { formatDecimal } from '@/engines/form-renderer/values';
 import { approvalsApi, docKeys } from '@/features/documents/api';
 import { dueText } from '@/features/documents/workflow-progress';
 import { t } from '@/i18n';
-import { InboxItemsView } from './inbox-items';
 import { useInboxCounts } from './use-inbox-counts';
 import { fmtRelative } from '@/lib/format';
 
@@ -26,7 +25,6 @@ export function InboxPage() {
   const docType = sp.get('docType') ?? undefined;
   const stage = sp.get('stage') ?? undefined;
   const overdue = sp.get('overdue') === '1';
-  const view = sp.get('view') === 'items' ? 'items' : 'docs';
   const set = (patch: Record<string, string | null>) => {
     const n = new URLSearchParams(sp.toString());
     for (const [k, v] of Object.entries(patch)) { if (v) n.set(k, v); else n.delete(k); }
@@ -48,14 +46,7 @@ export function InboxPage() {
       <PageHeader title={t('inbox.title')} description={t('inbox.subtitle')} />
       <CountsStrip counts={counts.data} loading={counts.isLoading} docType={docType} stage={stage} overdue={overdue} onPick={(dt, st) => set({ docType: dt, stage: st })} onOverdue={v => set({ overdue: v ? '1' : null })} />
 
-      <div className="mt-4 flex w-fit overflow-hidden rounded border border-border" role="group" aria-label={t('inbox.view.label')}>
-        <button type="button" aria-pressed={view === 'docs'} onClick={() => set({ view: null })} data-testid="inbox-view-docs"
-          className={cn('px-4 py-1.5 text-sm font-semibold transition-colors', view === 'docs' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}>{t('inbox.view.docs')}</button>
-        <button type="button" aria-pressed={view === 'items'} onClick={() => set({ view: 'items' })} data-testid="inbox-view-items"
-          className={cn('border-l border-border px-4 py-1.5 text-sm font-semibold transition-colors', view === 'items' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}>{t('inbox.view.items')}</button>
-      </div>
-
-      <Card className="mt-3 overflow-hidden" data-testid="inbox-list">
+      <Card className="mt-4 overflow-hidden" data-testid="inbox-list">
         {list.isLoading ? (
           <div className="divide-y divide-border" aria-busy="true">{[0, 1, 2, 3].map(i => <div key={i} className="flex gap-3 p-4"><Skeleton className="h-10 w-10 rounded" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-1/3" /><Skeleton className="h-3 w-1/2" /></div></div>)}</div>
         ) : list.isError ? (
@@ -63,8 +54,6 @@ export function InboxPage() {
         ) : rows.length === 0 ? (
           <EmptyState icon={<Inbox />} title={docType || overdue ? t('inbox.emptyFiltered') : t('inbox.empty')} description={docType || overdue ? undefined : t('inbox.emptyHint')}
             action={docType || overdue ? <Button variant="secondary" onClick={() => set({ docType: null, stage: null, overdue: null })}>{t('docs.list.clearFilters')}</Button> : undefined} />
-        ) : view === 'items' ? (
-          <InboxItemsView rows={rows} />
         ) : (
           <ul className="divide-y divide-border">
             {rows.map(i => <InboxRow key={`${i.documentId}:${i.stageKey}`} i={i} currency={currency} />)}

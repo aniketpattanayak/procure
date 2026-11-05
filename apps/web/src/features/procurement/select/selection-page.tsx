@@ -1,10 +1,10 @@
 'use client';
 import type { ComparisonSheet, OrderableLine } from '@procure/schema';
-import { Button, Checkbox, cn, Dialog, DialogContent, EmptyState, Input, NativeSelect, Segmented, Skeleton, toast } from '@procure/ui';
+import { Button, Checkbox, cn, EmptyState, Input, NativeSelect, Segmented, Skeleton, toast } from '@procure/ui';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Award, ListChecks, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, Award, ListChecks, Search, Split, Sparkles, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { InlineAlert, PageBody, PageHeader } from '@/components/page';
 import { useTenantLocale } from '@/engines/form-renderer/tenant';
@@ -37,6 +37,7 @@ function lineNoOf(l: OrderableLine & { lineNo?: number }) { return l.lineNo ?? l
 export function SelectionPage() {
   const p = usePermissions();
   const flow = useProcurementFlow();
+  const router = useRouter();
   const sp = useSearchParams();
   const qc = useQueryClient();
   const me = useTenantPrincipal();
@@ -76,15 +77,7 @@ export function SelectionPage() {
     else delete next[l.indentLineId];
     return next;
   });
-  /** Create / change / clear one line's allocation; a line with no rows left is un-picked. */
-  const setAlloc = (id: string, fn: (a: Alloc | null) => Alloc | null) => setAllocs(all => {
-    const nx = fn(all[id] ?? null);
-    const n = { ...all };
-    if (nx && nx.rows.length) n[id] = nx; else delete n[id];
-    return n;
-  });
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const canSubmit = p.has(PERM.selectionSubmit);
+  const update = (id: string, fn: (a: Alloc) => Alloc) => setAllocs(a => (a[id] ? { ...a, [id]: fn(a[id]!) } : a));
 
   const canOver = p.has(PERM.overApprove);
   const evaluate = (l: OrderableLine, a: Alloc): Evaluation => {
@@ -133,12 +126,8 @@ export function SelectionPage() {
       void qc.invalidateQueries({ queryKey: procKeys.all });
       void qc.invalidateQueries({ queryKey: docKeys.all('vendor_selection') });
       void qc.invalidateQueries({ queryKey: docKeys.all('indent') });
-      // Stay on the page: picked lines are cleared and the list reloads (fully covered lines drop off).
-      const approved = doc.statusKey === 'approved';
-      toast.success(approved ? t('proc.sel.savedApproved', { number: doc.number ?? '' }) : mode === 'submit' ? t('proc.sel.submitted', { number: doc.number ?? '' }) : t('proc.sel.saved'));
-      setAllocs({});
-      setSaving(null);
-      void qc.invalidateQueries({ queryKey: procKeys.selectable(query) });
+      toast.success(mode === 'submit' ? t('proc.sel.submitted', { number: doc.number ?? '' }) : t('proc.sel.saved'));
+      router.push(`/docs/vendor_selection/${doc.id}${mode === 'submit' ? '?submitted=1' : ''}`);
     } catch (e) {
       setError(isApiError(e) ? e.message : String(e));
       setSaving(null);
@@ -195,6 +184,7 @@ export function SelectionPage() {
               {g.title && (
                 <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <h2 className="font-semibold">{g.title}</h2>
+                  {g.code && <span className="text-sm text-fg-subtle">{g.code}</span>}
                   <span className="text-sm text-fg-muted tabular-nums">{t('proc.sel.groupFacts', { n: g.rows.length, qty: fmtQty(dec.add(...g.rows.map(r => r.pendingOrder))), uom: g.rows[0]?.uom ?? '' })}</span>
                 </div>
               )}
@@ -204,7 +194,7 @@ export function SelectionPage() {
                   const ev = a ? evaluate(l, a) : null;
                   return (
                     <SelectableLineRow key={l.indentLineId} line={l} alloc={a ?? null} ev={ev} currency={currency} showItem={grouping === 'line'}
-                      onToggle={on => toggle(l, on)} onSet={fn => setAlloc(l.indentLineId, fn)} />
+                      onToggle={on => toggle(l, on)} onChange={fn => update(l.indentLineId, fn)} />
                   );
                 })}
               </ul>
@@ -228,316 +218,120 @@ export function SelectionPage() {
             {error && <p className="text-sm text-danger" role="alert" data-testid="select-error">{error}</p>}
           </div>
           <div className="flex gap-2">
-            {/* One Save: submits the selection (auto-approved when its workflow has no active stage); without the submit permission it saves a draft. */}
-            <Button disabled={!results.length || !!saving} loading={!!saving} data-testid="select-submit"
-              onClick={() => { setError(null); if (blocking.length) { setError(t('proc.sel.err.fix', { n: blocking.length })); return; } setConfirmOpen(true); }}>{t('proc.sel.save')}</Button>
+            <Button variant="secondary" disabled={!results.length || !!saving} loading={saving === 'draft'} onClick={() => submit('draft')} data-testid="select-save">{t('proc.sel.saveDraft')}</Button>
+            {p.has(PERM.selectionSubmit) && (
+              <Button disabled={!results.length || !!saving} loading={saving === 'submit'} onClick={() => submit('submit')} data-testid="select-submit">{t('proc.sel.submit')}</Button>
+            )}
           </div>
         </div>
       </div>
-      {confirmOpen && (
-        <SelectionConfirmDialog results={results} currency={currency} busy={!!saving}
-          onCancel={() => setConfirmOpen(false)} onConfirm={() => { void submit(canSubmit ? 'submit' : 'draft').finally(() => setConfirmOpen(false)); }} />
-      )}
     </PageBody>
   );
 }
 
-function SelectableLineRow({ line: l, alloc, ev, currency, showItem, onToggle, onSet }: {
+function SelectableLineRow({ line: l, alloc, ev, currency, showItem, onToggle, onChange }: {
   line: OrderableLine;
   alloc: Alloc | null;
   ev: Evaluation | null;
   currency: string;
   showItem: boolean;
   onToggle: (on: boolean) => void;
-  /** Create / change / clear this line's allocation (null or no rows = not picked). */
-  onSet: (fn: (a: Alloc | null) => Alloc | null) => void;
+  onChange: (fn: (a: Alloc) => Alloc) => void;
 }) {
   const k = lineKey(l);
   const uom = l.uom ?? '';
-  // Quotes are always shown under the line, so load them up front.
   const sheet = useQuery({
     queryKey: procKeys.lineComparison(l.indentLineId, l.pendingOrder),
     queryFn: () => procApi.lineComparison(l.indentLineId, l.pendingOrder),
+    enabled: !!alloc,
     staleTime: 60_000,
     retry: false,
   });
   const quoted = sheet.data?.vendors ?? [];
   const best = quoted.find(v => v.isBest) ?? null;
-  const quotedIds = new Set(quoted.map(v => v.vendor.id));
   const vendorRate = (vid: string | undefined) => quoted.find(v => v.vendor.id === vid);
-  const onChange = (fn: (a: Alloc) => Alloc) => onSet(a => (a ? fn(a) : a));
-  // Ticking a line pre-fills the best quote for the whole qty once the sheet is loaded.
+
+  // Pre-fill the first empty row from the best quote as soon as the sheet loads.
   useEffect(() => {
     if (!alloc || !best) return;
     const first = alloc.rows[0];
-    if (alloc.rows.length === 1 && first && !first.vendor && !first.rate) suggest(sheet.data!);
+    if (alloc.rows.length === 1 && first && !first.vendor) suggest(sheet.data!);
   }, [best?.vendor.id, !!alloc]);
+
   function suggest(s: ComparisonSheet) {
     const b = s.vendors.find(v => v.isBest) ?? s.vendors[0];
     if (!b) return;
-    onSet(a => ({ reason: a?.reason ?? '', rows: [{ key: rk(), vendor: b.vendor, qty: l.pendingOrder, rate: b.effectiveRate, quoteId: b.quoteId }] }));
+    onChange(a => ({ ...a, rows: [{ key: rk(), vendor: b.vendor, qty: l.pendingOrder, rate: b.effectiveRate, quoteId: b.quoteId }] }));
   }
   const setRow = (i: number, patch: Partial<AllocRow>) => onChange(a => ({ ...a, rows: a.rows.map((r, j) => (j === i ? { ...r, ...patch } : r)) }));
-  const isPlaceholder = (r: AllocRow) => !r.vendor && !r.rate.trim();
-  const qtyFor = (vid: string) => alloc?.rows.find(r => r.vendor?.id === vid)?.qty ?? '';
-  /** Typing a qty against a quoted vendor adds / updates / removes that vendor's split (rate from the quote). */
-  const setVendorQty = (v: ComparisonSheet['vendors'][number], raw: string) => {
-    const qv = raw.replace(/[^\d.]/g, '');
-    onSet(a => {
-      const rows = (a?.rows ?? []).filter(r => !isPlaceholder(r));
-      const i = rows.findIndex(r => r.vendor?.id === v.vendor.id);
-      let next = rows;
-      if (!qv) next = i >= 0 ? rows.filter((_, j) => j !== i) : rows;
-      else if (i >= 0) next = rows.map((r, j) => (j === i ? { ...r, qty: qv } : r));
-      else next = [...rows, { key: rk(), vendor: v.vendor, qty: qv, rate: v.effectiveRate, quoteId: v.quoteId }];
-      return { reason: a?.reason ?? '', rows: next };
-    });
-  };
-  const addVendor = () => onSet(a => ({ reason: a?.reason ?? '', rows: [...(a?.rows ?? []).filter(r => !isPlaceholder(r)), { key: rk(), vendor: null, qty: '', rate: '' }] }));
-  const removeRow = (i: number) => onSet(a => (a ? { ...a, rows: a.rows.filter((_, j) => j !== i) } : a));
-  const custom = (alloc?.rows ?? []).map((r, i) => ({ r, i })).filter(({ r }) => !r.vendor || !quotedIds.has(r.vendor.id));
-  const history = sheet.data?.history ?? [];
+  const split = () => onChange(a => {
+    const total = dec.add(...a.rows.map(r => (isDecimal(r.qty) ? r.qty : '0')));
+    const left = dec.max0(dec.sub(l.pendingOrder, total));
+    const used = new Set(a.rows.map(r => r.vendor?.id));
+    const nextV = quoted.filter(v => !used.has(v.vendor.id)).sort((x, y) => num(x.landedCostPerUnit) - num(y.landedCostPerUnit))[0];
+    return { ...a, rows: [...a.rows, { key: rk(), vendor: nextV?.vendor ?? null, qty: dec.gt0(left) ? left : '', rate: nextV?.effectiveRate ?? '', quoteId: nextV?.quoteId }] };
+  });
+
   const on = !!alloc;
-  const cell = 'px-2 py-1.5 text-right tabular-nums';
   return (
     <li className={cn('rounded-lg border bg-surface transition-colors', on ? 'border-accent/50 shadow-sm' : 'border-border')} data-testid={`select-line-${k}`} data-selectable={l.pendingOrder}>
       <label className="flex cursor-pointer items-start gap-3 px-3 py-2.5">
         <Checkbox className="mt-1" checked={on} onCheckedChange={c => onToggle(!!c)} data-testid={`select-pick-${k}`} aria-label={t('proc.sel.pickLine', { number: l.indentNumber ?? '', item: l.item?.name ?? '' })} />
         <span className="grid min-w-0 flex-1 gap-x-4 gap-y-0.5 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]">
           <span className="min-w-0">
-            <span className="block truncate font-medium">{showItem && l.item ? l.item.name : (l.indentNumber ?? t('docs.draft'))}</span>
+            <span className="block truncate font-medium">{showItem && l.item ? <>{l.item.name} <span className="font-normal text-fg-subtle">{l.item.code}</span></> : (l.indentNumber ?? t('docs.draft'))}</span>
             <span className="block truncate text-sm text-fg-muted">{showItem ? l.indentNumber : null}{showItem ? ' · ' : ''}{l.location.name}{l.requiredDate ? ` · ${t('proc.quotes.needBy', { date: fmtDate(l.requiredDate) })}` : ''}</span>
           </span>
-          <span className="text-sm text-fg-muted sm:self-center">
-            {best ? <span className="inline-flex items-center gap-1 text-success"><Award className="size-3.5" aria-hidden />{t('proc.sel.bestShort', { vendor: best.vendor.name, rate: fmtRate(best.effectiveRate, currency) })}</span>
-              : sheet.isSuccess && !quoted.length ? t('proc.sel.noQuotes') : null}
-          </span>
-          <span className="text-right sm:self-center">
-            <span className="block text-xs text-fg-muted">{t('proc.sel.q.toSelect')}</span>
-            <span className="font-semibold tabular-nums" data-testid={`select-qty-avail-${k}`}>{fmtQty(l.pendingOrder)} <span className="text-sm font-normal text-fg-muted">{uom}</span></span>
-          </span>
+          <span className="text-sm text-fg-muted sm:self-center">{on && best ? <span className="inline-flex items-center gap-1 text-success"><Award className="size-3.5" aria-hidden />{t('proc.sel.bestShort', { vendor: best.vendor.name, rate: fmtRate(best.effectiveRate, currency) })}</span> : on && sheet.isSuccess && !quoted.length ? t('proc.sel.noQuotes') : null}</span>
+          <span className="text-right font-semibold tabular-nums sm:self-center" data-testid={`select-qty-avail-${k}`}>{fmtQty(l.pendingOrder)} <span className="text-sm font-normal text-fg-muted">{uom}</span></span>
         </span>
       </label>
 
-      <div className="space-y-3 border-t border-border px-3 pb-3 pt-3 sm:pl-10" data-testid={`select-alloc-${k}`}>
-        {sheet.isLoading ? <Skeleton className="h-16 w-full" /> : quoted.length > 0 ? (
-          <div className="overflow-x-auto rounded border border-border" data-testid={`select-quotes-${k}`}>
-            <table className="w-full min-w-[900px] text-sm">
-              <thead className="bg-subtle text-xs text-fg-muted">
-                <tr>
-                  <th className="px-2 py-1.5 text-left font-medium">{t('proc.sel.q.vendor')}</th>
-                  <th className="px-2 py-1.5 text-right font-medium">{t('proc.sel.q.rate')}</th>
-                  <th className="px-2 py-1.5 text-right font-medium">{t('proc.sel.q.freight')}</th>
-                  <th className="px-2 py-1.5 text-right font-medium">{t('proc.sel.q.tax')}</th>
-                  <th className="px-2 py-1.5 text-right font-medium">{t('proc.sel.q.landed')}</th>
-                  <th className="px-2 py-1.5 text-right font-medium">{t('proc.sel.q.total')}</th>
-                  <th className="px-2 py-1.5 text-right font-medium">{t('proc.sel.q.lead')}</th>
-                  <th className="px-2 py-1.5 text-right font-medium">{t('proc.sel.q.moq')}</th>
-                  <th className="px-2 py-1.5 text-left font-medium">{t('proc.sel.q.valid')}</th>
-                  <th className="px-2 py-1.5 text-left font-medium">{t('proc.sel.q.terms')}</th>
-                  <th className="w-32 px-2 py-1.5 text-right font-medium">{t('proc.sel.q.qty', { uom })}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {quoted.map(v => {
-                  const qv = qtyFor(v.vendor.id);
-                  return (
-                    <tr key={v.quoteId} className={cn(qv ? 'bg-accent-soft/50' : v.isBest ? 'bg-success-soft/30' : '')} data-testid={`select-quote-${k}-${v.vendor.code}`}>
-                      <td className="px-2 py-1.5">
-                        <span className="font-medium">{v.vendor.name}</span>
-                        {v.isBest && <span className="ml-1.5 inline-flex items-center gap-0.5 rounded bg-success-soft px-1 text-xs font-medium text-success"><Award className="size-3" aria-hidden />{t('proc.sel.q.best')}</span>}
-                        {v.expired && <span className="ml-1.5 rounded bg-danger-soft px-1 text-xs text-danger">{t('proc.sel.q.expired')}</span>}
-                        {v.warnings.includes('below_moq') && <span className="ml-1.5 rounded bg-warning-soft px-1 text-xs text-warning">{t('proc.sel.q.belowMoq')}</span>}
-                      </td>
-                      <td className={cell}>{fmtRate(v.effectiveRate, currency)}</td>
-                      <td className={cell}>{fmtRate(v.freightPerUnit, currency)}</td>
-                      <td className={cell}>{v.taxPct}%</td>
-                      <td className={cn(cell, 'font-semibold')}>{fmtRate(v.landedCostPerUnit, currency)}</td>
-                      <td className={cell}>{fmtRate(v.landedTotal, currency)}</td>
-                      <td className={cell}>{v.leadTimeDays === null ? '—' : t('proc.sel.q.leadDays', { n: v.leadTimeDays })}</td>
-                      <td className={cell}>{v.moq ? fmtQty(v.moq) : '—'}</td>
-                      <td className="px-2 py-1.5 whitespace-nowrap">{v.validUntil ? fmtDate(v.validUntil) : '—'}</td>
-                      <td className="px-2 py-1.5">{v.paymentTerms ?? '—'}</td>
-                      <td className="px-2 py-1">
-                        <Input inputMode="decimal" placeholder="0" value={qv} onChange={e => setVendorQty(v, e.target.value)}
-                          className="h-8 text-right tabular-nums" aria-label={t('proc.sel.q.qtyFor', { vendor: v.vendor.name })} data-testid={`select-qq-${k}-${v.vendor.code}`} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      {alloc && ev && (
+        <div className="space-y-3 border-t border-border px-3 pb-3 pt-3 sm:pl-10" data-testid={`select-alloc-${k}`}>
+          <AllocationMeter parts={alloc.rows.map(r => ({ label: r.vendor?.name ?? '—', qty: isDecimal(r.qty) ? r.qty : '0' }))} available={l.pendingOrder} uom={uom} state={ev.state} overAllowed={ev.overAllowed} testId={`select-meter-${k}`} />
+          <ol className="space-y-2">
+            {alloc.rows.map((r, i) => {
+              const vq = vendorRate(r.vendor?.id);
+              return (
+                <li key={r.key} className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_8rem_auto] sm:items-center" data-testid={`select-alloc-${k}-row-${i}`}>
+                  <div className="col-span-2 sm:col-span-1">
+                    <MasterPicker masterKey="vendor" value={r.vendor} ariaLabel={t('proc.sel.vendorN', { n: i + 1 })} compact testId={`select-vendor-${k}-${i}`}
+                      suggestions={quoted.map(v => ({ ...v.vendor, hint: t('proc.sel.quotedHint', { rate: fmtRate(v.effectiveRate, currency) }) + (v.isBest ? ` · ${t('proc.cmp.best')}` : '') }))}
+                      onChange={v => { const q2 = quoted.find(x => x.vendor.id === v?.id); setRow(i, { vendor: v, rate: q2 ? q2.effectiveRate : r.rate, quoteId: q2?.quoteId }); }} />
+                  </div>
+                  <div className="relative">
+                    <Input inputMode="decimal" className="h-8 pr-10" value={r.qty} onChange={e => setRow(i, { qty: e.target.value })} aria-label={t('proc.sel.qtyN', { n: i + 1 })} data-testid={`select-qty-${k}-${i}`}
+                      aria-invalid={!isDecimal(r.qty) || ev.state === 'blocked' || undefined} />
+                    <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-fg-subtle">{uom}</span>
+                  </div>
+                  <div className="relative">
+                    <Input inputMode="decimal" className="h-8 pr-10" value={r.rate} onChange={e => setRow(i, { rate: e.target.value, quoteId: vq && vq.effectiveRate === e.target.value ? vq.quoteId : r.quoteId })} aria-label={t('proc.sel.rateN', { n: i + 1 })} data-testid={`select-rate-${k}-${i}`} />
+                    <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-fg-subtle">{currency}</span>
+                  </div>
+                  <div className="col-span-2 flex items-center justify-between gap-2 sm:col-span-1 sm:justify-end">
+                    <span className="text-sm text-fg-muted tabular-nums sm:hidden">{fmtRate(num(r.qty) * num(r.rate), currency)}</span>
+                    <Button variant="ghost" size="icon-sm" disabled={alloc.rows.length === 1} onClick={() => onChange(a => ({ ...a, rows: a.rows.filter((_, j) => j !== i) }))} aria-label={t('proc.sel.removeRow', { n: i + 1 })} data-testid={`select-remove-${k}-${i}`}><Trash2 aria-hidden /></Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={split} data-testid={`select-split-${k}`}><Split aria-hidden />{t('proc.sel.split')}</Button>
+            {sheet.data && quoted.length > 0 && <Button variant="ghost" size="sm" onClick={() => suggest(sheet.data!)} data-testid={`select-suggest-${k}`}><Sparkles aria-hidden />{t('proc.sel.suggest')}</Button>}
           </div>
-        ) : (
-          <p className="text-sm text-fg-muted" data-testid={`select-noquotes-${k}`}>{t('proc.sel.q.none')}</p>
-        )}
-
-        {custom.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">{t('proc.sel.q.other')}</p>
-            <ol className="space-y-2">
-              {custom.map(({ r, i }) => {
-                const vq = vendorRate(r.vendor?.id);
-                return (
-                  <li key={r.key} className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_8rem_auto] sm:items-center" data-testid={`select-alloc-${k}-row-${i}`}>
-                    <div className="col-span-2 sm:col-span-1">
-                      <MasterPicker masterKey="vendor" value={r.vendor} ariaLabel={t('proc.sel.vendorN', { n: i + 1 })} compact testId={`select-vendor-${k}-${i}`}
-                        onChange={v => { const q2 = quoted.find(x => x.vendor.id === v?.id); setRow(i, { vendor: v, rate: q2 ? q2.effectiveRate : r.rate, quoteId: q2?.quoteId }); }} />
-                    </div>
-                    <div className="relative">
-                      <Input inputMode="decimal" className="h-8 pr-10" placeholder={t('proc.sel.q.qtyPh')} value={r.qty} onChange={e => setRow(i, { qty: e.target.value })} aria-label={t('proc.sel.qtyN', { n: i + 1 })} data-testid={`select-qty-${k}-${i}`}
-                        aria-invalid={(r.qty !== '' && !isDecimal(r.qty)) || undefined} />
-                      <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-fg-subtle">{uom}</span>
-                    </div>
-                    <div className="relative">
-                      <Input inputMode="decimal" className="h-8 pr-10" placeholder={t('proc.sel.q.ratePh')} value={r.rate} onChange={e => setRow(i, { rate: e.target.value, quoteId: vq && vq.effectiveRate === e.target.value ? vq.quoteId : r.quoteId })} aria-label={t('proc.sel.rateN', { n: i + 1 })} data-testid={`select-rate-${k}-${i}`} />
-                      <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-fg-subtle">{currency}</span>
-                    </div>
-                    <div className="col-span-2 flex items-center justify-between gap-2 sm:col-span-1 sm:justify-end">
-                      <span className="text-sm text-fg-muted tabular-nums sm:hidden">{fmtRate(num(r.qty) * num(r.rate), currency)}</span>
-                      <Button variant="ghost" size="icon-sm" onClick={() => removeRow(i)} aria-label={t('proc.sel.removeRow', { n: i + 1 })} data-testid={`select-remove-${k}-${i}`}><Trash2 aria-hidden /></Button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={addVendor} data-testid={`select-add-vendor-${k}`}><Plus aria-hidden />{t('proc.sel.q.addVendor')}</Button>
-          {sheet.data && quoted.length > 0 && <Button variant="ghost" size="sm" onClick={() => suggest(sheet.data!)} data-testid={`select-suggest-${k}`}><Sparkles aria-hidden />{t('proc.sel.suggest')}</Button>}
-        </div>
-
-        {alloc && ev && (
-          <>
-            <AllocationMeter parts={alloc.rows.map(r => ({ label: r.vendor?.name ?? '—', qty: isDecimal(r.qty) ? r.qty : '0' }))} available={l.pendingOrder} uom={uom} state={ev.state} overAllowed={ev.overAllowed} testId={`select-meter-${k}`} />
-            {(ev.state === 'over' || ev.state === 'blocked') && (
-              <div className="space-y-1">
-                <label htmlFor={`reason-${k}`} className="text-sm font-medium">{t('proc.sel.overReason')}</label>
-                <Input id={`reason-${k}`} value={alloc.reason} onChange={e => onChange(a => ({ ...a, reason: e.target.value }))} maxLength={500} placeholder={t('proc.sel.overReasonHint')} data-testid={`select-reason-${k}`} disabled={ev.state === 'blocked'} />
-              </div>
-            )}
-            {ev.problems.length > 0 && (
-              <ul className="space-y-0.5 text-sm text-danger" data-testid={`select-problems-${k}`}>{ev.problems.map(pr => <li key={pr}>{pr}</li>)}</ul>
-            )}
-          </>
-        )}
-
-        {history.length > 0 && (
-          <div data-testid={`select-history-${k}`}>
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-muted">{t('proc.sel.q.history')}</p>
-            <div className="overflow-x-auto rounded border border-border">
-              <table className="w-full text-xs">
-                <thead className="bg-subtle text-left text-fg-muted">
-                  <tr><th className="px-2 py-1 font-medium">{t('proc.sel.q.po')}</th><th className="px-2 py-1 font-medium">{t('proc.sel.q.date')}</th><th className="px-2 py-1 font-medium">{t('proc.sel.q.vendor')}</th><th className="px-2 py-1 text-right font-medium">{t('proc.sel.q.rate')}</th></tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {history.slice(0, 10).map(h => (
-                    <tr key={`${h.poNumber}-${h.vendorId}`}>
-                      <td className="px-2 py-1 tabular-nums">{h.poNumber}</td>
-                      <td className="px-2 py-1">{fmtDate(h.date)}</td>
-                      <td className="px-2 py-1">{h.vendorName}</td>
-                      <td className="px-2 py-1 text-right tabular-nums">{fmtRate(h.rate, currency)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {(ev.state === 'over' || ev.state === 'blocked') && (
+            <div className="space-y-1">
+              <label htmlFor={`reason-${k}`} className="text-sm font-medium">{t('proc.sel.overReason')}</label>
+              <Input id={`reason-${k}`} value={alloc.reason} onChange={e => onChange(a => ({ ...a, reason: e.target.value }))} maxLength={500} placeholder={t('proc.sel.overReasonHint')} data-testid={`select-reason-${k}`} disabled={ev.state === 'blocked'} />
             </div>
-          </div>
-        )}
-      </div>
-    </li>
-  );
-}
-
-/** Overview before "Submit for approval": every split with qty, rate and amount, totals per vendor. */
-function SelectionConfirmDialog({ results, currency, busy, onCancel, onConfirm }: {
-  results: { l: OrderableLine; a: Alloc }[]; currency: string; busy: boolean; onCancel: () => void; onConfirm: () => void;
-}) {
-  const qc = useQueryClient();
-  const rows = results.flatMap(r => {
-    // Pull the cached comparison sheet for this line to get quote-level detail.
-    const sheet = qc.getQueryData<ComparisonSheet>(procKeys.lineComparison(r.l.indentLineId, r.l.pendingOrder));
-    return r.a.rows.map(row => {
-      const vendorSheet = sheet?.vendors.find(v => (row.quoteId ? v.quoteId === row.quoteId : v.vendor.id === row.vendor?.id));
-      return {
-        key: `${r.l.indentLineId}-${row.key}`,
-        indent: r.l.indentNumber ?? '',
-        location: r.l.location.name,
-        item: r.l.item?.name ?? '—',
-        vendor: row.vendor?.name ?? '—',
-        qty: row.qty,
-        uom: r.l.uom ?? '',
-        rate: row.rate,
-        amount: num(row.qty) * num(row.rate),
-        freightPerUnit: vendorSheet?.freightPerUnit ?? null,
-        taxPct: vendorSheet?.taxPct ?? null,
-        landedPerUnit: vendorSheet?.landedCostPerUnit ?? null,
-        leadTimeDays: vendorSheet?.leadTimeDays ?? null,
-        validUntil: vendorSheet?.validUntil ?? null,
-        paymentTerms: vendorSheet?.paymentTerms ?? null,
-      };
-    });
-  });
-  const byVendor = new Map<string, number>();
-  for (const r of rows) byVendor.set(r.vendor, (byVendor.get(r.vendor) ?? 0) + r.amount);
-  const grand = rows.reduce((s, r) => s + r.amount, 0);
-  const COL_COUNT = 12;
-  return (
-    <Dialog open onOpenChange={o => { if (!o && !busy) onCancel(); }}>
-      <DialogContent size="lg" className="sm:max-w-[90vw] xl:max-w-7xl" title={t('proc.sel.confirm.title')} description={t('proc.sel.confirm.summary', { lines: results.length, vendors: byVendor.size })} data-testid="select-confirm-dialog"
-        footer={<>
-          <Button variant="secondary" onClick={onCancel} disabled={busy} data-testid="select-confirm-cancel">{t('common.cancel')}</Button>
-          <Button onClick={onConfirm} loading={busy} data-testid="select-confirm-ok">{t('proc.sel.save')}</Button>
-        </>}>
-        <div className="max-h-[60vh] overflow-auto rounded border border-border">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-subtle text-left text-xs text-fg-muted">
-              <tr>
-                <th className="px-3 py-2 font-medium">{t('proc.sel.confirm.indent')}</th>
-                <th className="px-3 py-2 font-medium">{t('proc.sel.confirm.location')}</th>
-                <th className="px-3 py-2 font-medium">{t('proc.sel.confirm.item')}</th>
-                <th className="px-3 py-2 font-medium">{t('proc.sel.q.vendor')}</th>
-                <th className="px-3 py-2 text-right font-medium">{t('proc.sel.confirm.qty')}</th>
-                <th className="px-3 py-2 text-right font-medium">{t('proc.sel.q.rate')}</th>
-                <th className="px-3 py-2 text-right font-medium">{t('proc.sel.q.freight')}</th>
-                <th className="px-3 py-2 text-right font-medium">{t('proc.sel.q.tax')}</th>
-                <th className="px-3 py-2 text-right font-medium">{t('proc.sel.q.landed')}</th>
-                <th className="px-3 py-2 text-right font-medium">{t('proc.sel.q.lead')}</th>
-                <th className="px-3 py-2 font-medium">{t('proc.sel.q.valid')}</th>
-                <th className="px-3 py-2 font-medium">{t('proc.sel.q.terms')}</th>
-                <th className="px-3 py-2 text-right font-medium">{t('proc.sel.confirm.amount')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {rows.map(r => (
-                <tr key={r.key}>
-                  <td className="px-3 py-2 whitespace-nowrap tabular-nums">{r.indent}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{r.location}</td>
-                  <td className="px-3 py-2">{r.item}</td>
-                  <td className="px-3 py-2">{r.vendor}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtQty(r.qty)} <span className="text-fg-subtle">{r.uom}</span></td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtRate(r.rate, currency)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{r.freightPerUnit !== null ? fmtRate(r.freightPerUnit, currency) : '—'}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{r.taxPct !== null ? `${r.taxPct}%` : '—'}</td>
-                  <td className="px-3 py-2 text-right font-semibold tabular-nums">{r.landedPerUnit !== null ? fmtRate(r.landedPerUnit, currency) : '—'}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{r.leadTimeDays !== null ? t('proc.sel.q.leadDays', { n: r.leadTimeDays }) : '—'}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{r.validUntil ? fmtDate(r.validUntil) : '—'}</td>
-                  <td className="px-3 py-2">{r.paymentTerms ?? '—'}</td>
-                  <td className="px-3 py-2 text-right font-medium tabular-nums">{fmtRate(r.amount, currency)}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="border-t border-border bg-subtle text-sm">
-              {[...byVendor.entries()].map(([v, amt]) => (
-                <tr key={v}><td className="px-3 py-1.5 text-fg-muted" colSpan={COL_COUNT}>{t('proc.sel.confirm.vendorTotal', { vendor: v })}</td><td className="px-3 py-1.5 text-right tabular-nums">{fmtRate(amt, currency)}</td></tr>
-              ))}
-              <tr className="font-semibold"><td className="px-3 py-2" colSpan={COL_COUNT}>{t('proc.sel.confirm.grand')}</td><td className="px-3 py-2 text-right tabular-nums">{fmtRate(grand, currency)}</td></tr>
-            </tfoot>
-          </table>
+          )}
+          {ev.problems.length > 0 && (
+            <ul className="space-y-0.5 text-sm text-danger" data-testid={`select-problems-${k}`}>{ev.problems.map(pr => <li key={pr}>{pr}</li>)}</ul>
+          )}
         </div>
-      </DialogContent>
-    </Dialog>
+      )}
+    </li>
   );
 }

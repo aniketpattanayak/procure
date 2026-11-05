@@ -42,7 +42,6 @@ export function StockBalancesPage() {
   const includeChildren = sp.get('children') !== '0';
   const status = (sp.get('status') as StatusView | null) ?? 'all';
   const byBatch = sp.get('batch') === '1';
-  const combine = sp.get('combine') === '1';
   const belowMin = sp.get('below') === '1';
   const expiring = Number(sp.get('expiring') ?? 0) || 0;
   const [q, setQ] = useState(sp.get('q') ?? '');
@@ -59,7 +58,6 @@ export function StockBalancesPage() {
   const query: BalanceQuery = {
     node: node || undefined, includeChildren, item: item?.id, q: dq || undefined,
     status: status === 'all' ? undefined : status, byBatch: byBatch || expiring > 0, belowMin, expiringWithinDays: expiring || undefined,
-    combine: combine || undefined,
   };
   const queryKey = JSON.stringify(query);
   const fetchPage = useCallback((cursor: string | null) => stockApi.balances(query, cursor), [queryKey]);
@@ -86,10 +84,10 @@ export function StockBalancesPage() {
           </span>
         ),
       },
-      ...(!combine ? [{
+      {
         id: 'node', label: t('stock.col.location'), header: t('stock.col.location'), width: 200,
-        cell: ({ row: { original: r } }: { row: { original: StockBalanceRow } }) => r.node ? <span className="truncate" title={r.node.path.join(' / ')}>{r.node.name}<span className="block truncate text-xs text-fg-subtle">{r.node.path.slice(0, -1).join(' / ')}</span></span> : <span className="text-fg-subtle">—</span>,
-      }] : []),
+        cell: ({ row: { original: r } }) => <span className="truncate" title={r.node.path.join(' / ')}>{r.node.name}<span className="block truncate text-xs text-fg-subtle">{r.node.path.slice(0, -1).join(' / ')}</span></span>,
+      },
     ];
     if (byBatch || expiring > 0) {
       cols.push({
@@ -132,20 +130,20 @@ export function StockBalancesPage() {
             </Button>
           )}
           <Button asChild size="sm" variant="ghost" aria-label={t('stock.ledger.forItem', { item: r.item.name })}>
-            <Link href={r.node ? `/stock/ledger?item=${r.item.id}&node=${r.node.id}&children=0` : `/stock/ledger?item=${r.item.id}`}><History aria-hidden /></Link>
+            <Link href={`/stock/ledger?item=${r.item.id}&node=${r.node.id}&children=0`}><History aria-hidden /></Link>
           </Button>
         </span>
       ),
     });
     return cols;
-  }, [byBatch, combine, expiring, held.join(','), showValue, canBlock, currency]);
+  }, [byBatch, expiring, held.join(','), showValue, canBlock, currency]);
 
   const views: { value: StatusView; label: string }[] = [
     { value: 'all', label: t('stock.view.all') },
     ...statusCols.filter(c => held.includes(c.s)).map(c => ({ value: c.s as StatusView, label: t(c.label) })),
   ];
 
-  const hasFilters = !!(node || item || dq || belowMin || expiring || combine || status !== 'all');
+  const hasFilters = !!(node || item || dq || belowMin || expiring || status !== 'all');
   return (
     <PageBody>
       <PageHeader
@@ -170,7 +168,7 @@ export function StockBalancesPage() {
           columns={columns}
           fetchPage={fetchPage}
           queryKey={`${queryKey}:${bump}`}
-          getRowId={r => `${r.item.id}:${r.node?.id ?? 'all'}:${r.batch?.id ?? ''}`}
+          getRowId={r => `${r.item.id}:${r.node.id}:${r.batch?.id ?? ''}`}
           onRowClick={r => setDrawer(r)}
           storageKey="stock:balances"
           rowHeight={52}
@@ -187,7 +185,6 @@ export function StockBalancesPage() {
               <CheckLabel checked={includeChildren} onChange={v => setParams({ children: v ? null : '0' })} label={t('stock.includeChildren')} testId="stock-filter-children" disabled={!node} />
               <Segmented<StatusView> label={t('stock.view.label')} value={views.some(v => v.value === status) ? status : 'all'} onChange={v => setParams({ status: v === 'all' ? null : v })} options={views} data-testid="stock-status-view" />
               <CheckLabel checked={byBatch || expiring > 0} onChange={v => setParams({ batch: v ? '1' : null })} label={t('stock.byBatch')} testId="stock-filter-batch" disabled={expiring > 0} />
-              <CheckLabel checked={combine} onChange={v => setParams({ combine: v ? '1' : null })} label={t('stock.combineLocations')} testId="stock-filter-combine" />
               <CheckLabel checked={belowMin} onChange={v => setParams({ below: v ? '1' : null })} label={t('stock.belowMinOnly')} testId="stock-filter-below" />
               <NativeSelect aria-label={t('stock.expiring')} className="h-8 w-full sm:w-44" value={String(expiring)} onChange={e => setParams({ expiring: e.target.value === '0' ? null : e.target.value })} data-testid="stock-filter-expiring">
                 {EXPIRY_OPTIONS.map(d => <option key={d} value={d}>{d === 0 ? t('stock.expiringAny') : t('stock.expiringIn', { n: d })}</option>)}

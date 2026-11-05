@@ -16,15 +16,15 @@ const ROW_H = 41;
 
 function colWidth(c: GridColumn): number {
   switch (c.type) {
-    case 'checkbox': case 'toggle': return 60;
-    case 'number': case 'decimal': case 'percentage': return 100;
-    case 'currency': case 'formula': return 110;
-    case 'date': case 'time': return 120;
-    case 'datetime': case 'daterange': return 180;
-    case 'lookup': case 'multilookup': case 'multiselect': return 150;
-    case 'file': case 'image': case 'files': case 'signature': return 180;
-    case 'textarea': return 180;
-    default: return 150;
+    case 'checkbox': case 'toggle': return 72;
+    case 'number': case 'decimal': case 'percentage': return 120;
+    case 'currency': case 'formula': return 140;
+    case 'date': case 'time': return 150;
+    case 'datetime': case 'daterange': return 230;
+    case 'lookup': case 'multilookup': case 'multiselect': return 180;
+    case 'file': case 'image': case 'files': case 'signature': return 240;
+    case 'textarea': return 240;
+    default: return 180;
   }
 }
 

@@ -101,7 +101,7 @@ function sheetFor(lineIds: string[], qtyStr?: string): ComparisonSheet {
 
 function toOrderable(l: MockLine): OrderableLine {
   return {
-    sourceLineId: l.lineId, sourceKind: 'indent', indentLineId: l.lineId, indentNumber: l.indentNumber, selectionNumber: null, lineNo: l.lineNo, item: { id: l.item.id, code: l.item.code, name: l.item.name },
+    sourceLineId: l.lineId, sourceKind: 'indent', indentLineId: l.lineId, indentNumber: l.indentNumber, lineNo: l.lineNo, item: { id: l.item.id, code: l.item.code, name: l.item.name },
     uom: l.item.uom, vendor: null, rate: null, location: l.location, requiredDate: l.requiredDate, pendingOrder: l.selectable,
   };
 }
