@@ -2,7 +2,7 @@
 import type { ApprovedIndentLine, DocumentRow } from '@procure/schema';
 import { Button, Checkbox, cn, Dialog, DialogContent, EmptyState, Input, Label, NativeSelect, Skeleton, toast } from '@procure/ui';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle2, List, Search } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, List, Plus, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { InlineAlert, PageBody, PageHeader } from '@/components/page';
@@ -19,6 +19,7 @@ import { useDebounced } from '@/lib/use-debounced';
 import { procApi, procKeys, type ApprovedIndentQuery, type PoFromIndentBody } from '../api';
 import { fmtRate, num } from '../calc';
 import { MasterPicker, type PickedOption } from '../components/master-picker';
+import { QuoteFormDialog, type QuoteLineContext } from '../quotes/quote-form';
 
 interface LinePick { qty: string; vendor: PickedOption | null; rate: string }
 interface VendorHeader { deliveryDate: string; paymentTerms: PickedOption | null; remarks: string }
@@ -41,12 +42,26 @@ export function OrderPage() {
   const [created, setCreated] = useState<DocumentRow[] | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [vendorHeaders, setVendorHeaders] = useState<Record<string, VendorHeader>>({});
+  const [quoteForm, setQuoteForm] = useState<{ open: boolean; ctx: QuoteLineContext | null }>({ open: false, ctx: null });
 
   const setVendorHeader = (vendorId: string, patch: Partial<VendorHeader>) =>
     setVendorHeaders(prev => ({
       ...prev,
       [vendorId]: { deliveryDate: '', paymentTerms: null, remarks: '', ...prev[vendorId], ...patch },
     }));
+
+  const openQuoteForm = (l: ApprovedIndentLine) => setQuoteForm({
+    open: true,
+    ctx: {
+      lineId: l.indentLineId,
+      itemId: l.item?.id ?? null,
+      itemName: l.item?.name ?? '—',
+      qty: l.approvedQty,
+      uom: l.uom ?? '',
+      docNumber: l.indentNumber,
+      lineNo: l.lineNo,
+    },
+  });
 
   // ---- Data ----
   const locations = useQuery({
@@ -277,20 +292,27 @@ export function OrderPage() {
                         <span className="text-fg-subtle text-xs">None</span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 max-w-[12rem]">
+                    <td className="px-3 py-2.5 max-w-[14rem]">
                       {l.quotes.length === 0 ? (
-                        <span className="text-xs text-fg-subtle">No quotes</span>
+                        <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={() => openQuoteForm(l)}>
+                          <Plus className="size-3" aria-hidden />Add quote
+                        </Button>
                       ) : (
-                        <ul className="space-y-0.5">
-                          {l.quotes.slice(0, 3).map(q => (
-                            <li key={q.quoteId} className={cn('text-xs', q.expired && 'text-fg-subtle line-through')}>
-                              <span className="font-medium">{q.vendor.name}</span>
-                              <span className="text-fg-muted"> · {fmtRate(q.quotedRate, currency)}</span>
-                              {q.expired && <span className="text-warning ml-1">(expired)</span>}
-                            </li>
-                          ))}
-                          {l.quotes.length > 3 && <li className="text-xs text-fg-subtle">+{l.quotes.length - 3} more</li>}
-                        </ul>
+                        <div className="space-y-0.5">
+                          <ul className="space-y-0.5">
+                            {l.quotes.slice(0, 3).map(q => (
+                              <li key={q.quoteId} className={cn('text-xs', q.expired && 'text-fg-subtle line-through')}>
+                                <span className="font-medium">{q.vendor.name}</span>
+                                <span className="text-fg-muted"> · {fmtRate(q.quotedRate, currency)}</span>
+                                {q.expired && <span className="text-warning ml-1">(expired)</span>}
+                              </li>
+                            ))}
+                            {l.quotes.length > 3 && <li className="text-xs text-fg-subtle">+{l.quotes.length - 3} more</li>}
+                          </ul>
+                          <Button variant="ghost" size="sm" className="h-6 gap-1 px-1 text-xs text-fg-muted" onClick={() => openQuoteForm(l)}>
+                            <Plus className="size-3" aria-hidden />Add
+                          </Button>
+                        </div>
                       )}
                     </td>
                     <td className="min-w-[10rem] px-3 py-2.5">
@@ -442,6 +464,22 @@ export function OrderPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Add Vendor Quote dialog */}
+      {quoteForm.open && quoteForm.ctx && (
+        <QuoteFormDialog
+          open
+          onOpenChange={o => { if (!o) setQuoteForm({ open: false, ctx: null }); }}
+          line={quoteForm.ctx}
+          editing={null}
+          vendorSuggestions={[]}
+          currency={currency}
+          onSaved={_rows => {
+            setQuoteForm({ open: false, ctx: null });
+            void qc.invalidateQueries({ queryKey: procKeys.approvedIndents(indentQuery) });
+          }}
+        />
+      )}
     </PageBody>
   );
 }
