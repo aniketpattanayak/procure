@@ -78,7 +78,7 @@ function SortableField({ field, span, selected, issues, onSelect, onDuplicate, o
 } & Pick<CanvasProps, 'onSelect' | 'onDuplicate' | 'onDelete' | 'onMove'>) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: field.key });
   const isSel = selected?.key === field.key && !selected.col;
-  const system = 'system' in field && field.system;
+  const system = 'system' in field && field.system && !('deletable' in field && field.deletable);
   const info = typeInfo(field.type);
   const Icon = info.icon;
   const label = 'label' in field ? field.label : field.type === 'help' ? t('fb.type.help') : t('fb.type.divider');

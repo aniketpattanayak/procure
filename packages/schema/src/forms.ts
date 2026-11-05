@@ -61,6 +61,8 @@ const base = {
   label: z.string().min(1).max(120),
   /** Engine-required field: cannot be removed or retyped; label/help/order/width may change. */
   system: z.boolean().default(false),
+  /** When true, the client may delete this field even if system=true. Used for optional installer fields. */
+  deletable: z.boolean().optional(),
   help: z.string().max(500).optional(),
   placeholder: z.string().max(120).optional(),
   required: z.boolean().default(false),
