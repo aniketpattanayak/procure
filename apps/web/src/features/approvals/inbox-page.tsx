@@ -1,17 +1,14 @@
 'use client';
-import { useMemo } from 'react';
 import type { InboxCounts, InboxItem } from '@procure/schema';
 import { Button, Card, cn, EmptyState, LoadMore, Skeleton, Switch } from '@procure/ui';
-import { useInfiniteQuery, useQueries } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { ChevronRight, Clock, Forward, Inbox, Siren } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { PageBody, PageHeader } from '@/components/page';
 import { useTenantLocale } from '@/engines/form-renderer/tenant';
 import { formatDecimal } from '@/engines/form-renderer/values';
-import { approvalsApi, docKeys, docsApi } from '@/features/documents/api';
-import { HistoryTab } from './approve-screen';
-import type { DocumentLineRow, TimelineEntry } from '@procure/schema';
+import { approvalsApi, docKeys } from '@/features/documents/api';
 import { dueText } from '@/features/documents/workflow-progress';
 import { t } from '@/i18n';
 import { InboxItemsView } from './inbox-items';
@@ -29,8 +26,7 @@ export function InboxPage() {
   const docType = sp.get('docType') ?? undefined;
   const stage = sp.get('stage') ?? undefined;
   const overdue = sp.get('overdue') === '1';
-  const view = (sp.get('view') === 'items' ? 'items' : sp.get('view') === 'history' ? 'history' : 'docs') as 'docs' | 'items' | 'history';
-  const docId = sp.get('doc') ?? undefined;
+  const view = sp.get('view') === 'items' ? 'items' : 'docs';
   const set = (patch: Record<string, string | null>) => {
     const n = new URLSearchParams(sp.toString());
     for (const [k, v] of Object.entries(patch)) { if (v) n.set(k, v); else n.delete(k); }
@@ -57,8 +53,6 @@ export function InboxPage() {
           className={cn('px-4 py-1.5 text-sm font-semibold transition-colors', view === 'docs' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}>{t('inbox.view.docs')}</button>
         <button type="button" aria-pressed={view === 'items'} onClick={() => set({ view: 'items' })} data-testid="inbox-view-items"
           className={cn('border-l border-border px-4 py-1.5 text-sm font-semibold transition-colors', view === 'items' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}>{t('inbox.view.items')}</button>
-        <button type="button" aria-pressed={view === 'history'} onClick={() => set({ view: 'history' })} data-testid="inbox-view-history"
-          className={cn('border-l border-border px-4 py-1.5 text-sm font-semibold transition-colors', view === 'history' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}>History</button>
       </div>
 
       <Card className="mt-3 overflow-hidden" data-testid="inbox-list">
@@ -69,8 +63,6 @@ export function InboxPage() {
         ) : rows.length === 0 ? (
           <EmptyState icon={<Inbox />} title={docType || overdue ? t('inbox.emptyFiltered') : t('inbox.empty')} description={docType || overdue ? undefined : t('inbox.emptyHint')}
             action={docType || overdue ? <Button variant="secondary" onClick={() => set({ docType: null, stage: null, overdue: null })}>{t('docs.list.clearFilters')}</Button> : undefined} />
-        ) : view === 'history' ? (
-          <InboxHistoryTabContent rows={rows} />
         ) : view === 'items' ? (
           <InboxItemsView rows={rows} />
         ) : (
@@ -150,37 +142,4 @@ function InboxRow({ i, currency }: { i: InboxItem; currency: string }) {
       </Link>
     </li>
   );
-}
-
-function InboxHistoryTabContent({ rows }: { rows: InboxItem[] }) {
-  const timelineQueries = useQueries({
-    queries: rows.map(item => ({
-      queryKey: docKeys.timeline(item.docTypeKey, item.documentId),
-      queryFn: () => docsApi.timeline(item.docTypeKey, item.documentId),
-      staleTime: 60_000,
-    })),
-  });
-  const detailQueries = useQueries({
-    queries: rows.map(item => ({
-      queryKey: docKeys.detail(item.docTypeKey, item.documentId),
-      queryFn: () => docsApi.get(item.docTypeKey, item.documentId),
-      staleTime: 15_000,
-    })),
-  });
-  const lineById = useMemo(() => {
-    const m = new Map<string, DocumentLineRow>();
-    for (const q of detailQueries) {
-      if (q.data) for (const l of q.data.lines) m.set(l.id, l);
-    }
-    return m;
-  }, [detailQueries]);
-  const allEntries: TimelineEntry[] = [];
-  for (const q of timelineQueries) {
-    if (q.data) allEntries.push(...q.data);
-  }
-  allEntries.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-  if (timelineQueries.some(q => q.isLoading) || detailQueries.some(q => q.isLoading)) {
-    return <div className="flex justify-center py-8 text-sm text-fg-muted">{t('common.loading')}…</div>;
-  }
-  return <HistoryTab entries={allEntries} lineById={lineById} />;
 }

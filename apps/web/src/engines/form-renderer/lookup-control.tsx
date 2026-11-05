@@ -19,7 +19,6 @@ interface LookupLike {
   display?: string[];
   filterBy?: { field: string; targetField: string }[];
   maxSelected?: number;
-  allowCustom?: boolean;
 }
 
 export interface LookupControlProps {
@@ -45,17 +44,11 @@ function toCombo(o: OptionRow, display?: string[]): ComboOption {
   return { value: o.id, label: o.label || o.name, secondary, inactive: !o.isActive };
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const isUuid = (s: string) => UUID_RE.test(s);
-
 /** Async lookup / multilookup with cascading filters, autofill attributes and label hydration. */
 export function LookupControl({ field, value, onChange, scope, id, readOnly, compact, testId, describedBy, invalid, required, ariaLabel }: LookupControlProps) {
   const ctx = useRenderer();
   const multiple = field.type === 'multilookup';
-  const allowCustom = field.allowCustom === true;
-  // For allowCustom single lookups, value may be a plain string (not a UUID).
-  const isCustomValue = allowCustom && typeof value === 'string' && value && !isUuid(value);
-  const ids = useMemo(() => (multiple ? (Array.isArray(value) ? (value as string[]) : []) : typeof value === 'string' && value && isUuid(value) ? [value] : []), [multiple, value]);
+  const ids = useMemo(() => (multiple ? (Array.isArray(value) ? (value as string[]) : []) : typeof value === 'string' && value ? [value] : []), [multiple, value]);
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const dq = useDebounced(q, 250);
@@ -74,7 +67,7 @@ export function LookupControl({ field, value, onChange, scope, id, readOnly, com
   const options = useQuery({
     queryKey: ['lookup', sourceKey(field.source), dq, filters, attrs],
     queryFn: ({ signal }) => fetchOptions(field.source, { q: dq, filter: filters, attrs, signal }),
-    enabled: open && !missing && !readOnly,
+    enabled: open && !readOnly,
     staleTime: 30_000,
   });
   const remember = ctx.rememberOptions;
@@ -90,15 +83,11 @@ export function LookupControl({ field, value, onChange, scope, id, readOnly, com
   });
   useEffect(() => { if (hydrate.data) remember(hydrate.data); }, [hydrate.data, remember]);
 
-  const selected: ComboOption[] = [
-    // When allowCustom and value is a plain string, show it as a "custom" chip.
-    ...(isCustomValue ? [{ value: value as string, label: value as string }] : []),
-    ...ids.map(x => {
-      const o = ctx.optionFor(x);
-      if (o) return toCombo(o, field.display);
-      return { value: x, label: ctx.labelFromRefs(scopePath(scope, field.key), x) ?? (hydrate.isLoading ? '…' : t('fr.lookup.unknown')) };
-    }),
-  ];
+  const selected: ComboOption[] = ids.map(x => {
+    const o = ctx.optionFor(x);
+    if (o) return toCombo(o, field.display);
+    return { value: x, label: ctx.labelFromRefs(scopePath(scope, field.key), x) ?? (hydrate.isLoading ? '…' : t('fr.lookup.unknown')) };
+  });
 
   const comboOptions = (options.data ?? []).filter(o => o.isActive || ids.includes(o.id)).map(o => toCombo(o, field.display));
   const atMax = multiple && field.maxSelected !== undefined && ids.length >= field.maxSelected;
@@ -119,7 +108,7 @@ export function LookupControl({ field, value, onChange, scope, id, readOnly, com
         errorText={options.error ? (isApiError(options.error) ? options.error.message : t('fr.lookup.error')) : null}
         emptyText={dq ? t('fr.lookup.noMatch', { q: dq }) : parents.length ? t('fr.lookup.noneForParent', { label: parents.map(x => x.label).join(', ') }) : t('fr.lookup.none')}
         placeholder={missing ? hint : (field.placeholder ?? t('fr.lookup.placeholder'))}
-        disabled={!!missing && ids.length === 0}
+        disabled={false}
         readOnly={readOnly}
         compact={compact}
         testId={testId}
@@ -130,7 +119,6 @@ export function LookupControl({ field, value, onChange, scope, id, readOnly, com
         }}
         onRemove={v => (multiple ? onChange(ids.filter(x => x !== v), null) : onChange(null, null))}
         onClear={required ? undefined : () => onChange(null, null)}
-        onCreate={allowCustom && !multiple ? (v => onChange(v, null)) : undefined}
         aria-describedby={[describedBy, missing ? `${id}-cascade` : null].filter(Boolean).join(' ') || undefined}
         aria-invalid={invalid || undefined}
         aria-required={required || undefined}

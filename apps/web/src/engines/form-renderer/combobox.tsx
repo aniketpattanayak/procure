@@ -32,19 +32,13 @@ export interface ComboboxProps {
   'aria-invalid'?: boolean;
   'aria-required'?: boolean;
   'aria-label'?: string;
-  /**
-   * Creatable mode: when set, the user may accept a typed value that doesn't match any option.
-   * Called with the trimmed query string; the parent commits it as a custom value.
-   * A "Use …" row is shown at the top of the dropdown when the query doesn't match any existing option.
-   */
-  onCreate?: (value: string) => void;
 }
 
 /** WAI-ARIA combobox with a listbox popup in a portal (works inside scrolling grids and dialogs). */
 export function Combobox(props: ComboboxProps) {
   const {
     id, options, selected, multiple, onSelect, onRemove, onClear, query, onQueryChange, onOpenChange, loading, placeholder, disabled, readOnly,
-    emptyText, errorText, compact, testId, onCreate, ...aria
+    emptyText, errorText, compact, testId, ...aria
   } = props;
   const autoId = useId();
   const inputId = id ?? autoId;
@@ -110,11 +104,6 @@ export function Combobox(props: ComboboxProps) {
     listRef.current?.querySelector(`[data-index="${active}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [active, open]);
 
-  function handleCreate(value: string) {
-    onCreate!(value);
-    setOpen(false);
-  }
-
   function choose(o: ComboOption) {
     if (multiple && selectedSet.has(o.value)) onRemove(o.value);
     else onSelect(o);
@@ -140,7 +129,6 @@ export function Combobox(props: ComboboxProps) {
       setActive(a => Math.max(a - 1, 0));
     } else if (e.key === 'Enter') {
       if (open && filtered[active]) { e.preventDefault(); choose(filtered[active]!); }
-      else if (open && onCreate && q.trim() && !filtered.length) { e.preventDefault(); handleCreate(q.trim()); }
     } else if (e.key === 'Escape') {
       if (open) { e.preventDefault(); e.stopPropagation(); setOpen(false); }
     } else if (e.key === 'Backspace' && multiple && !q && selected.length) {
@@ -159,7 +147,7 @@ export function Combobox(props: ComboboxProps) {
           'h-auto min-h-9 flex-wrap items-center gap-1 py-1 pr-14',
           // A11Y8-004: the inner <input> is outline-none, so the wrapper shows the focus ring (WCAG 2.4.7)
           'focus-within:outline focus-within:outline-2 focus-within:outline-offset-0 focus-within:outline-ring',
-          compact && 'min-h-8 rounded-none border-transparent bg-transparent focus-within:border-accent focus-within:outline-1 focus-within:-outline-offset-1',
+          compact && 'min-h-8 rounded-none border-transparent border-b-border bg-transparent focus-within:border-accent focus-within:outline-1 focus-within:-outline-offset-1',
           (disabled || readOnly) && 'cursor-not-allowed bg-subtle',
           aria['aria-invalid'] && 'border-danger',
         )}
@@ -197,12 +185,12 @@ export function Combobox(props: ComboboxProps) {
       </div>
       <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center gap-1">
         {loading && open && <Loader2 className="size-4 animate-spin text-fg-subtle" aria-hidden />}
-        {!multiple && single && onClear && !disabled && !readOnly && (
+        {!multiple && single && onClear && !disabled && !readOnly && !compact && (
           <button type="button" className="pointer-events-auto rounded p-0.5 text-fg-subtle hover:text-fg" aria-label={t('fr.combo.clear')} onClick={e => { e.stopPropagation(); onClear(); }}>
             <X className="size-3.5" />
           </button>
         )}
-        <ChevronDown className="size-4 text-fg-subtle" aria-hidden />
+        <ChevronDown className={cn("size-4 text-fg-subtle", compact && "hidden")} aria-hidden />
       </div>
       {open && rect && container && createPortal(
         <ul
@@ -218,48 +206,31 @@ export function Combobox(props: ComboboxProps) {
             <li className="px-2 py-2 text-sm text-danger" role="presentation">{errorText}</li>
           ) : loading && filtered.length === 0 ? (
             <li className="px-2 py-2 text-sm text-fg-muted" role="presentation">{t('common.loading')}…</li>
-          ) : filtered.length === 0 && !(onCreate && q.trim()) ? (
+          ) : filtered.length === 0 ? (
             <li className="px-2 py-2 text-sm text-fg-muted" role="presentation">{emptyText ?? t('fr.combo.empty')}</li>
-          ) : (
-            <>
-              {/* Creatable row: shown when allowCustom=true and user has typed something */}
-              {onCreate && q.trim() && (
-                <li
-                  role="option"
-                  aria-selected={false}
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={() => handleCreate(q.trim())}
-                  className={cn('flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-base', filtered.length === 0 && 'bg-muted')}
-                  data-testid={testId ? `${testId}-create` : 'lookup-create'}
-                >
-                  <span className="min-w-0 flex-1 truncate text-accent">{t('fr.combo.useCustom', { value: q.trim() })}</span>
-                </li>
-              )}
-              {filtered.map((o, i) => {
-                const isSel = selectedSet.has(o.value);
-                return (
-                  <li
-                    key={o.value}
-                    id={`${inputId}-opt-${i}`}
-                    data-index={i}
-                    role="option"
-                    aria-selected={isSel}
-                    onMouseDown={e => e.preventDefault()}
-                    onClick={() => choose(o)}
-                    onMouseEnter={() => setActive(i)}
-                    className={cn('flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-base', i === active && 'bg-muted', o.inactive && 'text-fg-subtle')}
-                    data-testid={testId ? `${testId}-option` : 'lookup-option'}
-                    data-value={o.value}
-                  >
-                    <Check className={cn('size-4 shrink-0 text-accent', !isSel && 'invisible')} aria-hidden />
-                    <span className="min-w-0 flex-1 truncate">{o.label}</span>
-                    {o.secondary && <span className="shrink-0 text-xs text-fg-subtle">{o.secondary}</span>}
-                    {o.inactive && <span className="shrink-0 text-xs text-fg-subtle">{t('fr.inactive')}</span>}
-                  </li>
-                );
-              })}
-            </>
-          )}
+          ) : filtered.map((o, i) => {
+            const isSel = selectedSet.has(o.value);
+            return (
+              <li
+                key={o.value}
+                id={`${inputId}-opt-${i}`}
+                data-index={i}
+                role="option"
+                aria-selected={isSel}
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => choose(o)}
+                onMouseEnter={() => setActive(i)}
+                className={cn('flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-base', i === active && 'bg-muted', o.inactive && 'text-fg-subtle')}
+                data-testid={testId ? `${testId}-option` : 'lookup-option'}
+                data-value={o.value}
+              >
+                <Check className={cn('size-4 shrink-0 text-accent', !isSel && 'invisible')} aria-hidden />
+                <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                {o.secondary && <span className="shrink-0 text-xs text-fg-subtle">{o.secondary}</span>}
+                {o.inactive && <span className="shrink-0 text-xs text-fg-subtle">{t('fr.inactive')}</span>}
+              </li>
+            );
+          })}
         </ul>,
         container,
       )}

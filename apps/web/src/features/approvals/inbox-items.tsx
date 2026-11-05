@@ -2,7 +2,7 @@
 import type { DocumentLineRow, DocumentRow, InboxItem } from '@procure/schema';
 import { Button, Checkbox, cn, EmptyState, Input, Skeleton, toast } from '@procure/ui';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
-import { Inbox, Play } from 'lucide-react';
+import { Inbox } from 'lucide-react';
 import Link from 'next/link';
 import { Fragment, useCallback, useMemo, useState } from 'react';
 import { docKeys, docsApi, newIdempotencyKey } from '@/features/documents/api';
@@ -15,49 +15,34 @@ import { ConfirmDecisionDialog, type ConfirmRow, type DecisionKind } from './con
 
 interface ItemRow { key: string; i: InboxItem; doc: DocumentRow; line: DocumentLineRow; pending: string }
 
-export function InboxItemsView({ rows, docId }: { rows: InboxItem[]; docId?: string }) {
+/**
+ * Approvals page, "All items" view: every pending line of the listed documents in one table. Type a qty (or tick a
+ * row to fill its whole pending qty), then Approve / Hold / Reject; a popup shows the overview before anything saves.
+ */
+export function InboxItemsView({ rows }: { rows: InboxItem[] }) {
   const qc = useQueryClient();
-  const filteredRows = docId ? rows.filter(i => i.documentId === docId) : rows;
   const details = useQueries({
-    queries: filteredRows.map(i => ({ queryKey: docKeys.detail(i.docTypeKey, i.documentId), queryFn: () => docsApi.get(i.docTypeKey, i.documentId), staleTime: 15_000 })),
+    queries: rows.map(i => ({ queryKey: docKeys.detail(i.docTypeKey, i.documentId), queryFn: () => docsApi.get(i.docTypeKey, i.documentId), staleTime: 15_000 })),
   });
   const loading = details.some(d => d.isLoading);
 
-  const { items, heldItems } = useMemo(() => {
+  const items = useMemo(() => {
     const out: ItemRow[] = [];
-    const held: ItemRow[] = [];
-    filteredRows.forEach((i, idx) => {
+    rows.forEach((i, idx) => {
       const doc = details[idx]?.data;
       if (!doc) return;
       for (const line of [...doc.lines].sort((a, b) => a.lineNo - b.lineNo)) {
         const pending = line.stages?.[i.stageKey]?.pending;
-        const heldQty = line.stages?.[i.stageKey]?.held;
         if (dec.gt0(pending)) out.push({ key: `${i.documentId}:${i.stageKey}:${line.id}`, i, doc, line, pending: pending! });
-        if (dec.gt0(heldQty)) held.push({ key: `held:${i.documentId}:${i.stageKey}:${line.id}`, i, doc, line, pending: heldQty! });
       }
     });
-    return { items: out, heldItems: held };
-  }, [filteredRows, details]);
+    return out;
+  }, [rows, details]);
 
   const [qtys, setQtys] = useState<Record<string, string>>({});
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<{ kind: DecisionKind; picked: ItemRow[]; rows: ConfirmRow[] } | null>(null);
-
-  const [unholdBusy, setUnholdBusy] = useState<string | null>(null);
-
-  const unhold = useCallback(async (r: ItemRow) => {
-    setUnholdBusy(r.key);
-    try {
-      await docsApi.act(r.i.docTypeKey, r.i.documentId, { action: 'unhold', stageKey: r.i.stageKey, lineIds: [r.line.id] }, { version: r.doc.version, idempotencyKey: newIdempotencyKey() });
-      await qc.invalidateQueries({ queryKey: docKeys.detail(r.i.docTypeKey, r.i.documentId) });
-      await qc.invalidateQueries({ queryKey: docKeys.inbox });
-      toast.success(t('approve.unheld', { n: 1 }));
-    } catch (e) {
-      toast.error(t('error.generic'), isApiError(e) ? e.message : String(e));
-    } finally {
-      setUnholdBusy(null);
-    }
-  }, [qc]);
 
   const typed = (k: string) => (qtys[k] ?? '').trim() !== '';
   const allOn = items.length > 0 && items.every(r => typed(r.key));
@@ -79,13 +64,19 @@ export function InboxItemsView({ rows, docId }: { rows: InboxItem[]; docId?: str
       const canExceed = kind === 'approve' && r.i.docTypeKey === 'indent';
       if (!canExceed && dec.cmp(v, r.pending) > 0) { toast.error(t('approve.overPendingDoc', { line: ln, pending: fmtQty(r.pending) })); return; }
     }
+    if (kind !== 'approve' && reason.trim().length < 3) {
+      toast.error(t('approve.reasonNeeded'));
+      document.querySelector<HTMLInputElement>('[data-testid="inbox-items-reason"]')?.focus();
+      return;
+    }
     setConfirm({
       kind, picked,
       rows: picked.map(r => ({ key: r.key, doc: r.i.number ?? '', item: lineItemLabel(r.line), uom: lineUom(r.line), pending: r.pending, qty: dec.norm(qtys[r.key]!.trim()) })),
     });
   };
 
-  const send = useCallback(async (sharedReason?: string) => {
+  /** One decide call per document and stage; the overview already showed exactly what is sent. */
+  const send = useCallback(async () => {
     if (!confirm) return;
     setBusy(true);
     const groups = new Map<string, ItemRow[]>();
@@ -93,13 +84,14 @@ export function InboxItemsView({ rows, docId }: { rows: InboxItem[]; docId?: str
       const k = `${r.i.docTypeKey}|${r.i.documentId}|${r.i.stageKey}`;
       groups.set(k, [...(groups.get(k) ?? []), r]);
     }
+    const r0 = reason.trim();
     let okLines = 0;
     const failed: string[] = [];
     for (const g of groups.values()) {
       const { i, doc } = g[0]!;
       const decisions = g.map(r => {
         const v = dec.norm(qtys[r.key]!.trim());
-        return { lineId: r.line.id, approve: confirm.kind === 'approve' ? v : '0', hold: confirm.kind === 'hold' ? v : '0', reject: confirm.kind === 'reject' ? v : '0', ...(sharedReason ? { reason: sharedReason } : {}) };
+        return { lineId: r.line.id, approve: confirm.kind === 'approve' ? v : '0', hold: confirm.kind === 'hold' ? v : '0', reject: confirm.kind === 'reject' ? v : '0', ...(r0 ? { reason: r0 } : {}) };
       });
       try {
         await docsApi.act(i.docTypeKey, i.documentId, { action: 'decide', stageKey: i.stageKey, decisions }, { version: doc.version, idempotencyKey: newIdempotencyKey() });
@@ -116,15 +108,15 @@ export function InboxItemsView({ rows, docId }: { rows: InboxItem[]; docId?: str
     setConfirm(null);
     if (okLines) {
       toast.success(t(kind === 'approve' ? 'approve.didApprove' : kind === 'hold' ? 'approve.didHold' : 'approve.didReject', { n: okLines }));
-      setQtys({});
+      setQtys({}); setReason('');
     }
     if (failed.length) toast.error(t('approve.someFailed', { n: failed.length }), failed.join('\n'));
-  }, [confirm, qtys, qc]);
+  }, [confirm, qtys, reason, qc]);
 
-  if (loading && !items.length && !heldItems.length) {
+  if (loading && !items.length) {
     return <div className="space-y-2 p-4" aria-busy="true">{[0, 1, 2, 3].map(k => <Skeleton key={k} className="h-9 w-full" />)}</div>;
   }
-  if (!items.length && !heldItems.length) return <EmptyState icon={<Inbox />} title={t('inbox.items.empty')} />;
+  if (!items.length) return <EmptyState icon={<Inbox />} title={t('inbox.items.empty')} />;
 
   return (
     <div data-testid="inbox-items">
@@ -133,6 +125,7 @@ export function InboxItemsView({ rows, docId }: { rows: InboxItem[]; docId?: str
         <Button size="sm" variant="secondary" className="border-success/50 font-semibold text-success" disabled={busy} onClick={() => prepare('approve')} data-testid="inbox-items-approve">{t('approve.approve')}</Button>
         <Button size="sm" variant="secondary" className="border-warning/50 font-semibold text-warning" disabled={busy} onClick={() => prepare('hold')} data-testid="inbox-items-hold">{t('approve.hold')}</Button>
         <Button size="sm" variant="danger-outline" className="font-semibold" disabled={busy} onClick={() => prepare('reject')} data-testid="inbox-items-reject">{t('approve.reject')}</Button>
+        <Input value={reason} onChange={e => setReason(e.target.value)} placeholder={t('approve.reasonPlaceholder')} aria-label={t('approve.reasonPlaceholder')} className="h-8 w-full sm:w-64" data-testid="inbox-items-reason" />
         <span className="ml-auto text-sm text-fg-muted tabular-nums">{t('inbox.items.count', { n: items.length })}</span>
       </div>
       <div className="overflow-x-auto">
@@ -180,11 +173,12 @@ export function InboxItemsView({ rows, docId }: { rows: InboxItem[]; docId?: str
                     </p>}
                   </td>
                 </tr>
+                {/* Item context below each row: last indents / POs / inventory, and the line's approval history */}
                 <tr className={rowCls} data-testid={`inbox-item-details-${r.i.number ?? r.i.documentId}-${r.line.lineNo}`}>
                   <td />
                   <td colSpan={6} className="px-3 pb-3 pt-0">
                     {typeof r.line.values.item === 'string' && r.line.values.item && <ItemContextPanel itemId={r.line.values.item} uom={uom} indent={false} />}
-                    <LineHistory docTypeKey={r.i.docTypeKey} docId={r.i.documentId} line={r.line} lineNo={r.line.lineNo} indent={false} />
+                    <LineHistory line={r.line} lineNo={r.line.lineNo} indent={false} />
                   </td>
                 </tr>
                 </Fragment>
@@ -194,45 +188,8 @@ export function InboxItemsView({ rows, docId }: { rows: InboxItem[]; docId?: str
         </table>
       </div>
       {confirm && (
-        <ConfirmDecisionDialog kind={confirm.kind} rows={confirm.rows} reason={''} busy={busy}
-          onCancel={() => setConfirm(null)} onConfirm={(reason) => void send(reason)} />
-      )}
-      {heldItems.length > 0 && (
-        <div className="border-t border-border" data-testid="inbox-held-items">
-          <div className="flex items-center gap-2 border-b border-border bg-warning/5 px-3 py-2.5">
-            <span className="text-sm font-semibold text-warning">{t('approve.held.title', { n: heldItems.length })}</span>
-          </div>
-          <table className="w-full min-w-[640px] overflow-x-auto text-sm">
-            <thead className="bg-subtle text-left text-xs text-fg-muted">
-              <tr>
-                <th className="px-3 py-2 font-medium">{t('approve.confirm.doc')}</th>
-                <th className="px-3 py-2 font-medium">{t('docs.col.item')}</th>
-                <th className="px-3 py-2 text-right font-medium">{t('docs.qty.held')}</th>
-                <th className="w-28 px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {heldItems.map(r => {
-                const uom = lineUom(r.line);
-                return (
-                  <tr key={r.key} data-testid={`held-item-${r.i.number ?? r.i.documentId}-${r.line.lineNo}`}>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <span className="font-medium tabular-nums">{r.i.number ?? t('docs.draft')}</span>
-                      <span className="block text-xs text-fg-subtle">{r.i.docTypeName} · {r.i.stageName}</span>
-                    </td>
-                    <td className="px-3 py-2">{lineItemLabel(r.line)}</td>
-                    <td className="px-3 py-2 text-right font-semibold tabular-nums text-warning">{fmtQty(r.pending)} {uom}</td>
-                    <td className="px-3 py-2 text-right">
-                      <Button size="sm" variant="secondary" onClick={() => void unhold(r)} loading={unholdBusy === r.key} disabled={!!unholdBusy} data-testid={`unhold-item-${r.line.lineNo}`}>
-                        <Play className="size-3 mr-1" aria-hidden />{t('approve.held.release')}
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ConfirmDecisionDialog kind={confirm.kind} rows={confirm.rows} reason={reason.trim()} busy={busy}
+          onCancel={() => setConfirm(null)} onConfirm={() => void send()} />
       )}
     </div>
   );

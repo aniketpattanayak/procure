@@ -78,7 +78,7 @@ function SortableField({ field, span, selected, issues, onSelect, onDuplicate, o
 } & Pick<CanvasProps, 'onSelect' | 'onDuplicate' | 'onDelete' | 'onMove'>) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: field.key });
   const isSel = selected?.key === field.key && !selected.col;
-  const system = 'system' in field && field.system && !('deletable' in field && field.deletable);
+  const system = 'system' in field && field.system;
   const info = typeInfo(field.type);
   const Icon = info.icon;
   const label = 'label' in field ? field.label : field.type === 'help' ? t('fb.type.help') : t('fb.type.divider');
@@ -95,7 +95,7 @@ function SortableField({ field, span, selected, issues, onSelect, onDuplicate, o
   const actions = (
     <div className={cn('flex shrink-0 items-center gap-0.5', !isSel && 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100')}>
       <Button variant="ghost" size="icon-sm" className="size-7" onClick={e => { e.stopPropagation(); onDuplicate(field.key); }} aria-label={t('fb.canvas.duplicate', { label })} data-testid={`canvas-dup-${field.key}`}><Copy /></Button>
-      <Button variant="ghost" size="icon-sm" className="size-7 hover:text-danger" disabled={!!system} onClick={e => { e.stopPropagation(); onDelete(field.key); }} aria-label={system ? t('fb.canvas.deleteSystem') : t('fb.canvas.delete', { label })} title={system ? t('fb.canvas.deleteSystem') : undefined} data-testid={`canvas-del-${field.key}`}><Trash2 /></Button>
+      <Button variant="ghost" size="icon-sm" className="size-7 hover:text-danger" disabled={!!system} onClick={e => { e.stopPropagation(); onDelete(field.key); }} aria-label={t('fb.canvas.delete', { label })} data-testid={`canvas-del-${field.key}`}><Trash2 /></Button>
     </div>
   );
   const handle = (

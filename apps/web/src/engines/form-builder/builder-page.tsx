@@ -57,7 +57,7 @@ function publishedIndex(def: FormDefinition | null) {
   const system = new Set<string>();
   for (const f of def?.fields ?? []) {
     types.set(f.key, f.type);
-    if ('system' in f && f.system && !('deletable' in f && f.deletable)) system.add(f.key);
+    if ('system' in f && f.system) system.add(f.key);
     if (f.type === 'grid') for (const c of f.columns) types.set(c.key, c.type);
   }
   return { types, system };
@@ -227,7 +227,7 @@ function Builder({ detail: initial }: { detail: FormDetail }) {
 
   const remove = useCallback((key: string) => {
     const f = def.fields.find(x => x.key === key);
-    if (!f || ('system' in f && f.system && !('deletable' in f && f.deletable))) return;
+    if (!f || ('system' in f && f.system)) return;
     change({ ...def, fields: def.fields.filter(x => x.key !== key) }, undefined, state.selected?.key === key ? null : state.selected);
     toast(t('fb.removed', { label: 'label' in f && f.label ? f.label : f.key }), { description: t('fb.removedHint') });
   }, [def, change, state.selected]);
