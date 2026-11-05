@@ -149,7 +149,7 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
     const show = new Set([...docType.settings.documentColumns, 'qty_requested', 'qty_approved', 'qty_held', 'qty_rejected', 'qty_pending']);
     const col = (c: DataTableColumn<DocListRow>): DataTableColumn<DocListRow> => ({ ...c, defaultHidden: !show.has(c.id) && !c.alwaysVisible });
     const cols: DataTableColumn<DocListRow>[] = [
-      col({ id: 'number', label: docType.settings.numberLabel || t('docs.col.number'), header: () => sortHeader('number', docType.settings.numberLabel || t('docs.col.number')), width: 160, alwaysVisible: true,
+      col({ id: 'number', label: docType.settings.numberLabel || t('docs.col.number'), header: () => sortHeader('number', docType.settings.numberLabel || t('docs.col.number')), width: 190, alwaysVisible: true,
         cell: ({ row: { original: r } }) => accordion ? (
           // Indents: the number opens the accordion (the row click does the same); "View" inside opens the page.
           <span className="inline-flex items-center gap-1.5 font-medium text-fg" data-testid={`doc-row-${r.number ?? r.id}`}>
@@ -164,8 +164,8 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
           </Link>
         ) }),
       col({ id: 'doc_date', label: t('docs.col.date'), header: () => sortHeader('doc_date', t('docs.col.date')), width: 120, cell: ({ row }) => fmtDate(row.original.docDate) }),
-      col({ id: 'location', label: t('docs.col.location'), header: t('docs.col.location'), width: 130, cell: ({ row }) => row.original.location?.name ?? '—' }),
-      col({ id: 'status', label: t('docs.col.status'), header: () => sortHeader('status', t('docs.col.status')), width: 180, cell: ({ row }) => {
+      col({ id: 'location', label: t('docs.col.location'), header: t('docs.col.location'), width: 160, cell: ({ row }) => row.original.location?.name ?? '—' }),
+      col({ id: 'status', label: t('docs.col.status'), header: () => sortHeader('status', t('docs.col.status')), width: 230, cell: ({ row }) => {
         const r = row.original as DocListRow;
         // Approved more than was asked for (approver increased the qty): flag it in the status.
         const excess = r.statusKey === 'approved' && dec.cmp(r.qty.approved, r.requestedQty) > 0;
@@ -179,13 +179,13 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
       col({ id: 'qty_held', label: t('docs.qty.held'), header: t('docs.qty.held'), width: 96, align: 'right', cell: ({ row }) => { const r = row.original as DocListRow; return <QtyCell value={r.qty.held} tone="warning" testId={`qty-held-${r.id}`} />; } }),
       col({ id: 'qty_rejected', label: t('docs.qty.rejected'), header: t('docs.qty.rejected'), width: 96, align: 'right', cell: ({ row }) => { const r = row.original as DocListRow; return <QtyCell value={r.qty.rejected} tone="danger" testId={`qty-rejected-${r.id}`} />; } }),
       col({ id: 'qty_pending', label: t('docs.qty.pending'), header: t('docs.qty.pending'), width: 104, align: 'right', cell: ({ row }) => { const r = row.original as DocListRow; return <PendingPill value={r.qty.pendingApproval} testId={`qty-pending-${r.id}`} />; } }),
-      col({ id: 'created_by', label: t('docs.col.createdBy'), header: t('docs.col.createdBy'), width: 120, cell: ({ row }) => row.original.createdBy ?? '—' }),
-      col({ id: 'created_at', label: t('docs.col.createdAt'), header: () => sortHeader('created_at', t('docs.col.createdAt')), width: 140, cell: ({ row }) => fmtDateTime(row.original.createdAt) }),
-      col({ id: 'submitted_at', label: t('docs.col.submittedAt'), header: () => sortHeader('submitted_at', t('docs.col.submittedAt')), width: 140, cell: ({ row }) => fmtDateTime(row.original.submittedAt) }),
+      col({ id: 'created_by', label: t('docs.col.createdBy'), header: t('docs.col.createdBy'), width: 150, cell: ({ row }) => row.original.createdBy ?? '—' }),
+      col({ id: 'created_at', label: t('docs.col.createdAt'), header: () => sortHeader('created_at', t('docs.col.createdAt')), width: 170, cell: ({ row }) => fmtDateTime(row.original.createdAt) }),
+      col({ id: 'submitted_at', label: t('docs.col.submittedAt'), header: () => sortHeader('submitted_at', t('docs.col.submittedAt')), width: 170, cell: ({ row }) => fmtDateTime(row.original.submittedAt) }),
     ];
     for (const f of headerCustom) {
       if (cols.some(c => c.id === f.key)) continue;
-      cols.push(col({ id: f.key, label: f.label, header: f.label, width: NUMERIC.has(f.type) ? 110 : 140, align: NUMERIC.has(f.type) ? 'right' : undefined, cell: ({ row }) => cellText(f, row.original.columns?.[f.key], currency) }));
+      cols.push(col({ id: f.key, label: f.label, header: f.label, width: NUMERIC.has(f.type) ? 130 : 180, align: NUMERIC.has(f.type) ? 'right' : undefined, cell: ({ row }) => cellText(f, row.original.columns?.[f.key], currency) }));
     }
     return withSort(cols);
   }, [docType, headerCustom, currency, sortHeader, withSort, type, accordion, expanded]);
@@ -197,7 +197,7 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
     const q = (id: string, label: string, bucket: keyof ItemListRow['qty'], tone?: 'success' | 'warning' | 'danger') =>
       col({ id, label, header: label, width: 96, align: 'right', cell: ({ row }) => <QtyCell value={row.original.qty[bucket]} tone={tone} testId={`qty-${bucket}-${row.original.number ?? row.original.documentId}-${row.original.lineNo}`} /> });
     const cols: DataTableColumn<ItemListRow>[] = [
-      col({ id: 'number', label: docType.settings.numberLabel || t('docs.col.number'), header: () => sortHeader('number', docType.settings.numberLabel || t('docs.col.number')), width: 170, alwaysVisible: true,
+      col({ id: 'number', label: docType.settings.numberLabel || t('docs.col.number'), header: () => sortHeader('number', docType.settings.numberLabel || t('docs.col.number')), width: 200, alwaysVisible: true,
         cell: ({ row: { original: r } }) => accordion ? (
           <span className="inline-flex items-center gap-1.5 font-medium" data-testid={`doc-row-${r.number ?? r.documentId}-${r.lineNo}`}>
             {expanded.has(r.lineId) ? <ChevronDown className="size-4 text-accent" aria-hidden /> : <ChevronRight className="size-4 text-fg-subtle" aria-hidden />}
@@ -209,7 +209,7 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
           </Link>
         ) }),
       col({ id: 'line_no', label: t('docs.col.lineNo'), header: () => sortHeader('line_no', '#', 'right'), width: 56, align: 'right', cell: ({ row }) => <span className="text-fg-muted">{row.original.lineNo}</span> }),
-      col({ id: 'item', label: t('docs.col.item'), header: () => sortHeader('item', t('docs.col.item')), width: 190, cell: ({ row }) => row.original.item ? <span className="truncate">{row.original.item.name}</span> : '—' }),
+      col({ id: 'item', label: t('docs.col.item'), header: () => sortHeader('item', t('docs.col.item')), width: 240, cell: ({ row }) => row.original.item ? <span className="truncate">{row.original.item.name}</span> : '—' }),
       col({ id: 'uom', label: t('docs.col.uom'), header: t('docs.col.uom'), width: 70, cell: ({ row }) => row.original.uom ?? '—' }),
       { ...q('qty', t('docs.qty.requested'), 'requested'), header: () => sortHeader('qty', t('docs.qty.requested'), 'right') },
       q('approved', t('docs.qty.approved'), 'approved', 'success'),
@@ -218,8 +218,8 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
       q('cancelled', t('docs.qty.cancelled'), 'cancelled'),
       col({ id: 'pending_approval', label: t('docs.qty.pending'), header: t('docs.qty.pending'), width: 104, align: 'right',
         cell: ({ row }) => <PendingPill value={row.original.qty.pendingApproval} testId={`qty-pending-${row.original.number ?? row.original.documentId}-${row.original.lineNo}`} /> }),
-      col({ id: 'status', label: t('docs.col.status'), header: t('docs.col.status'), width: 160, cell: ({ row }) => <DocStatusBadge statusKey={row.original.statusKey} label={row.original.statusLabel} docType={docType} /> }),
-      col({ id: 'location', label: t('docs.col.location'), header: t('docs.col.location'), width: 130, cell: ({ row }) => row.original.location?.name ?? '—' }),
+      col({ id: 'status', label: t('docs.col.status'), header: t('docs.col.status'), width: 190, cell: ({ row }) => <DocStatusBadge statusKey={row.original.statusKey} label={row.original.statusLabel} docType={docType} /> }),
+      col({ id: 'location', label: t('docs.col.location'), header: t('docs.col.location'), width: 150, cell: ({ row }) => row.original.location?.name ?? '—' }),
       col({ id: 'required_date', label: t('docs.col.requiredDate'), header: () => sortHeader('required_date', t('docs.col.requiredDate')), width: 130, cell: ({ row }) => fmtDate(row.original.requiredDate) }),
     ];
     for (const x of docExtension(type).itemColumns(docType)) {
@@ -227,7 +227,7 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
     }
     for (const c of lineCustom) {
       if (cols.some(x => x.id === c.key)) continue;
-      cols.push(col({ id: c.key, label: c.label, header: c.label, width: NUMERIC.has(c.type) ? 100 : 140, align: NUMERIC.has(c.type) ? 'right' : undefined, cell: ({ row }) => cellText(c, row.original.columns?.[c.key], currency) }));
+      cols.push(col({ id: c.key, label: c.label, header: c.label, width: NUMERIC.has(c.type) ? 120 : 170, align: NUMERIC.has(c.type) ? 'right' : undefined, cell: ({ row }) => cellText(c, row.original.columns?.[c.key], currency) }));
     }
     return withSort(cols);
   }, [docType, lineCustom, currency, sortHeader, withSort, type, accordion, expanded]);
@@ -320,7 +320,7 @@ function DocList({ docType }: { docType: DocTypeSummary }) {
           ? (expanded.has(r.lineId) ? <ItemVendorLog type={type} docId={r.documentId} lineId={r.lineId} /> : null)
           : (expanded.has(r.id) ? <IndentAccordion type={type} docId={r.id} /> : null)) : undefined}
         storageKey={storageKey}
-        rowHeight={filters.view === 'item' ? 36 : 40}
+        rowHeight={filters.view === 'item' ? 44 : 48}
         labels={labels}
         empty={empty}
         toolbar={

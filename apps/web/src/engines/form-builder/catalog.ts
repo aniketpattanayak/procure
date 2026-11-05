@@ -131,7 +131,7 @@ export function createDataField(type: FieldType, label: string, key: string): Gr
     case 'number': return { ...b, type };
     case 'select': case 'radio': return { ...b, type, options: [{ value: 'option_1', label: 'Option 1' }, { value: 'option_2', label: 'Option 2' }] };
     case 'multiselect': return { ...b, type, options: [{ value: 'option_1', label: 'Option 1' }, { value: 'option_2', label: 'Option 2' }] };
-    case 'lookup': case 'multilookup': return { ...b, type, source: { kind: 'master', masterKey: 'item' }, display: ['code', 'name'], filterBy: [], autofill: [], allowCustom: false };
+    case 'lookup': case 'multilookup': return { ...b, type, source: { kind: 'master', masterKey: 'item' }, display: ['code', 'name'], filterBy: [], autofill: [] };
     case 'formula': return { ...b, type, expr: '0', resultType: 'number', precision: 2 };
     case 'file': return { ...b, type, accept: [], maxSizeMb: 10, maxFiles: 1 };
     case 'image': return { ...b, type, accept: ['image/png', 'image/jpeg', 'image/webp'], maxSizeMb: 5, maxFiles: 1 };

@@ -31,7 +31,7 @@ export interface ControlProps {
   ariaLabel?: string;
 }
 
-const cellInput = 'h-8 rounded-none border-x-transparent border-t-transparent border-b-border bg-transparent px-2 focus-visible:outline-1 focus-visible:-outline-offset-1 aria-[invalid=true]:border-danger aria-[invalid=true]:bg-danger-soft/40';
+const cellInput = 'h-8 rounded-none border-transparent bg-transparent px-2 focus-visible:outline-1 focus-visible:-outline-offset-1 aria-[invalid=true]:border-danger aria-[invalid=true]:bg-danger-soft/40';
 
 // ----------------------------------------------------------------------------- formula (computed) value
 
