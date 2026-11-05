@@ -1,6 +1,6 @@
 'use client';
 import type { DocumentRow, OrderableLine } from '@procure/schema';
-import { Badge, Button, Card, Checkbox, cn, Dialog, DialogContent, EmptyState, Input, Label, NativeSelect, Skeleton, toast } from '@procure/ui';
+import { Badge, Button, Card, Checkbox, cn, EmptyState, Input, NativeSelect, Skeleton, toast } from '@procure/ui';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, CheckCircle2, PackagePlus, Search } from 'lucide-react';
 import Link from 'next/link';
@@ -39,10 +39,6 @@ export function OrderPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [created, setCreated] = useState<DocumentRow[] | null>(null);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [headerDeliveryDate, setHeaderDeliveryDate] = useState('');
-  const [headerPaymentTerms, setHeaderPaymentTerms] = useState<PickedOption | null>(null);
-  const [headerRemarks, setHeaderRemarks] = useState('');
 
   const locations = useQuery({ queryKey: locationKeys.mine, queryFn: () => locationsApi.tree({ scope: 'mine', view: 'active' }), staleTime: 5 * 60_000, retry: false });
   const query = { vendor: vendor?.id, item: item?.id, location: location === 'all' ? undefined : location, q: dq };
@@ -88,21 +84,11 @@ export function OrderPage() {
     return [...m.values()];
   }, [chosen]);
 
-  const openConfirm = () => {
-    setError(null);
-    if (bad.length) { setError(t('order.err.fix', { n: bad.length })); return; }
-    setShowConfirm(true);
-  };
-
   const create = async () => {
     setError(null);
     if (bad.length) { setError(t('order.err.fix', { n: bad.length })); return; }
-    const headerValues: Record<string, unknown> = {};
-    if (headerDeliveryDate) headerValues['expected_date'] = headerDeliveryDate;
-    if (headerPaymentTerms) headerValues['payment_terms'] = headerPaymentTerms.id;
-    if (headerRemarks) headerValues['remarks'] = headerRemarks;
     const body: PoFromLinesBody = {
-      values: headerValues,
+      values: {},
       picks: chosen.map(c => ({
         sourceLineId: c.id, qty: dec.norm(c.pk.qty),
         ...(c.l.sourceKind === 'indent' || c.pk.vendor?.id !== c.l.vendor?.id ? { vendorId: c.pk.vendor!.id } : {}),
@@ -114,10 +100,6 @@ export function OrderPage() {
       const docs = await procApi.poFromLines(body);
       setCreated(docs);
       setPicks({});
-      setShowConfirm(false);
-      setHeaderDeliveryDate('');
-      setHeaderPaymentTerms(null);
-      setHeaderRemarks('');
       void qc.invalidateQueries({ queryKey: procKeys.all });
       void qc.invalidateQueries({ queryKey: docKeys.all('po') });
       toast.success(t('order.created', { n: docs.length }));
@@ -244,94 +226,12 @@ export function OrderPage() {
             </>
           )}
           {error && <p className="text-sm text-danger" role="alert" data-testid="order-error">{error}</p>}
-          <Button className="w-full" disabled={!chosen.length} loading={saving} onClick={openConfirm} data-testid="order-create">
+          <Button className="w-full" disabled={!chosen.length} loading={saving} onClick={create} data-testid="order-create">
             {groups.length > 1 ? t('order.createN', { n: groups.length }) : t('order.create1')}
           </Button>
           <p className="text-xs text-fg-subtle">{t('order.draftNote')}</p>
         </Card>
       </div>
-
-      {/* Confirmation dialog */}
-      <Dialog open={showConfirm} onOpenChange={open => { if (!saving) setShowConfirm(open); }}>
-        <DialogContent
-          size="lg"
-          title="Review & confirm purchase orders"
-          description="Check the details below and fill in any header fields before creating the POs."
-          footer={
-            <>
-              <Button variant="ghost" onClick={() => setShowConfirm(false)} disabled={saving}>Cancel</Button>
-              <Button onClick={() => void create()} loading={saving} data-testid="order-confirm-create">
-                {groups.length > 1 ? `Create ${groups.length} purchase orders` : 'Create purchase order'}
-              </Button>
-            </>
-          }
-        >
-          {/* Vendor groups summary */}
-          <div className="space-y-4">
-            {groups.map(g => (
-              <div key={g.vendor.id} className="rounded-lg border border-border">
-                <div className="flex items-center justify-between border-b border-border bg-subtle px-4 py-2">
-                  <p className="font-semibold">{g.vendor.name}</p>
-                  <p className="text-sm text-fg-muted tabular-nums">{g.lines.length} line{g.lines.length !== 1 ? 's' : ''} · {currency} {fmtRate(g.value, currency)}</p>
-                </div>
-                <ul className="divide-y divide-border">
-                  {g.lines.map(c => (
-                    <li key={c.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 px-4 py-2.5 text-sm">
-                      <span className="truncate font-medium">{c.l.item?.name ?? '—'} <span className="font-normal text-fg-muted">{c.l.item?.code}</span></span>
-                      <span className="tabular-nums text-fg-muted">{fmtQty(c.pk.qty)} {c.l.uom ?? ''}</span>
-                      <span className="tabular-nums">{fmtRate(num(c.pk.qty) * num(c.pk.rate), currency)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-
-            {/* Header fields applied to all POs */}
-            <div className="space-y-3 rounded-lg border border-border p-4">
-              <p className="text-sm font-medium text-fg-muted">Header details <span className="font-normal">(applied to all POs above)</span></p>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label htmlFor="confirm-delivery-date">Expected delivery date</Label>
-                  <Input
-                    id="confirm-delivery-date"
-                    type="date"
-                    value={headerDeliveryDate}
-                    onChange={e => setHeaderDeliveryDate(e.target.value)}
-                    className="h-8"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="confirm-payment-terms">Payment terms</Label>
-                  <MasterPicker
-                    masterKey="payment_terms"
-                    value={headerPaymentTerms}
-                    onChange={setHeaderPaymentTerms}
-                    ariaLabel="Payment terms"
-                    placeholder="Select payment terms"
-                    id="confirm-payment-terms"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="confirm-remarks">Remarks / notes</Label>
-                <Input
-                  id="confirm-remarks"
-                  type="text"
-                  placeholder="Any notes for the vendor or internal reference…"
-                  value={headerRemarks}
-                  onChange={e => setHeaderRemarks(e.target.value)}
-                  className="h-8"
-                />
-              </div>
-            </div>
-
-            {error && <p className="text-sm text-danger" role="alert">{error}</p>}
-          </div>
-        </DialogContent>
-      </Dialog>
     </PageBody>
   );
 }
