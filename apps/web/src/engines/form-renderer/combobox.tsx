@@ -147,7 +147,7 @@ export function Combobox(props: ComboboxProps) {
           'h-auto min-h-9 flex-wrap items-center gap-1 py-1 pr-14',
           // A11Y8-004: the inner <input> is outline-none, so the wrapper shows the focus ring (WCAG 2.4.7)
           'focus-within:outline focus-within:outline-2 focus-within:outline-offset-0 focus-within:outline-ring',
-          compact && 'min-h-8 rounded-none border-transparent border-b-border bg-transparent focus-within:border-accent focus-within:outline-1 focus-within:-outline-offset-1',
+          compact && 'min-h-8 rounded-none border-transparent bg-transparent focus-within:border-accent focus-within:outline-1 focus-within:-outline-offset-1',
           (disabled || readOnly) && 'cursor-not-allowed bg-subtle',
           aria['aria-invalid'] && 'border-danger',
         )}
@@ -185,12 +185,12 @@ export function Combobox(props: ComboboxProps) {
       </div>
       <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center gap-1">
         {loading && open && <Loader2 className="size-4 animate-spin text-fg-subtle" aria-hidden />}
-        {!multiple && single && onClear && !disabled && !readOnly && !compact && (
+        {!multiple && single && onClear && !disabled && !readOnly && (
           <button type="button" className="pointer-events-auto rounded p-0.5 text-fg-subtle hover:text-fg" aria-label={t('fr.combo.clear')} onClick={e => { e.stopPropagation(); onClear(); }}>
             <X className="size-3.5" />
           </button>
         )}
-        <ChevronDown className={cn("size-4 text-fg-subtle", compact && "hidden")} aria-hidden />
+        <ChevronDown className="size-4 text-fg-subtle" aria-hidden />
       </div>
       {open && rect && container && createPortal(
         <ul
