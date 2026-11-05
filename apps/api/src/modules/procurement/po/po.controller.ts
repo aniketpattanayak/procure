@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
-import { AmendInput, DocumentRow, FollowupInput, FollowupRow, MyPermissions, OrderableLine, Page, PoFromLines, RevisionRow } from '@procure/schema';
+import { AmendInput, ApprovedIndentLine, ApprovedIndentQuery as ApprovedIndentQuerySchema, DocumentRow, FollowupInput, FollowupRow, MyPermissions, OrderableLine, Page, PoFromLines, RevisionRow } from '@procure/schema';
 import { z } from 'zod';
 import { TenantOnly } from '../../../core/auth/decorators';
 import { CurrentPermissions, Requires } from '../../../core/auth/permissions';
@@ -9,7 +9,7 @@ import { UuidParam } from '../../identity';
 import { FollowupsService } from '../followups/followups.service';
 import { procActor } from '../indent/actor';
 import { RevisionsService } from '../revisions/revisions.service';
-import { OrderableQuery, PoLinesService } from './po-lines.service';
+import { ApprovedIndentQuery, OrderableQuery, PoApprovedIndentService, PoLinesService } from './po-lines.service';
 import { PoService, PoTaxes, ShortCloseInput } from './po.service';
 
 const DocId = new UuidParam('Document');
@@ -18,13 +18,20 @@ const DocId = new UuidParam('Document');
 @TenantOnly()
 @Controller('procurement')
 export class PoLinesController {
-  constructor(private readonly db: DbService, private readonly lines: PoLinesService) {}
+  constructor(private readonly db: DbService, private readonly lines: PoLinesService, private readonly approvedIndentService: PoApprovedIndentService) {}
 
   @Get('orderable-lines')
   @Requires('doc.po:action.add')
   orderable(@Query(new Zod(OrderableQuery)) q: z.infer<typeof OrderableQuery>, @CurrentPermissions() perms?: MyPermissions): Promise<Page<OrderableLine>> {
     const a = procActor(perms);
     return this.db.tenantTx(a.tenantId, tx => this.lines.orderable(tx, a, q));
+  }
+
+  @Get('approved-indent-lines')
+  @Requires('doc.po:action.add')
+  approvedIndentLines(@Query(new Zod(ApprovedIndentQuery)) q: z.infer<typeof ApprovedIndentQuery>, @CurrentPermissions() perms?: MyPermissions): Promise<Page<ApprovedIndentLine>> {
+    const a = procActor(perms);
+    return this.db.tenantTx(a.tenantId, tx => this.approvedIndentService.approvedIndentLines(tx, a, q));
   }
 
   @Post('po/from-lines')

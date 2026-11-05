@@ -18,7 +18,7 @@ import { PoController, PoLinesController } from './po/po.controller';
 import { PoDerived } from './po/po-derived';
 import { PoHooks } from './po/po-hooks';
 import { PoLedger } from './po/po-ledger';
-import { PoLinesService } from './po/po-lines.service';
+import { PoApprovedIndentService, PoLinesService } from './po/po-lines.service';
 import { PoService } from './po/po.service';
 import { RevisionsService } from './revisions/revisions.service';
 import { TaxInstallStep } from './tax/tax.install';
@@ -40,7 +40,7 @@ import { TaxInstallStep } from './tax/tax.install';
     // --- agent A
     ProcurementInstaller, SystemTypeInstaller, ProcurementSteps, IndentLines, QuotesService, ComparisonService, ComparisonContextExtension, SelectionService, IndentShortCloseService,
     // --- agent B
-    TaxInstallStep, PoDerived, PoLedger, RevisionsService, FollowupsService, PoLinesService, PoService, PoHooks,
+    TaxInstallStep, PoDerived, PoLedger, RevisionsService, FollowupsService, PoLinesService, PoApprovedIndentService, PoService, PoHooks,
   ],
   exports: [ProcurementInstaller, SystemTypeInstaller, IndentLines, QuotesService, ComparisonService, SelectionService, /* agent B */ PoLedger, PoDerived],
 })

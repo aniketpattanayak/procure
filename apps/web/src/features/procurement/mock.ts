@@ -188,7 +188,15 @@ export const mockApi = {
       values: { party: vid }, refs: { party: { [vid]: Object.values(V).find(v => v.id === vid)?.name ?? 'Vendor' } },
     })), 400);
   },
-  taxes: (poId: string): Promise<PoTaxes> => {
+  approvedIndentLines: (_q: import('./api').ApprovedIndentQuery): Promise<import('@procure/schema').Page<import('@procure/schema').ApprovedIndentLine>> =>
+    wait({ data: [], nextCursor: null }),
+  poFromIndent: (body: import('./api').PoFromIndentBody) => {
+    const vendors = new Set(body.picks.map(p => p.vendorId));
+    return wait([...vendors].map(vid => fakeDoc('po', null as unknown as string, {
+      values: { party: vid }, refs: { party: { [vid]: 'Vendor' } },
+    })), 400);
+  },
+    taxes: (poId: string): Promise<PoTaxes> => {
     void poId;
     const mk = (taxable: number, rate: number, intra: boolean): TaxLine[] => intra
       ? [{ component: 'cgst', ratePct: String(rate / 2), taxableAmount: taxable.toFixed(2), taxAmount: (taxable * rate / 200).toFixed(2) },

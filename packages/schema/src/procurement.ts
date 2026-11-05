@@ -128,3 +128,53 @@ export interface RevisionRow { revNo: number; status: 'open' | 'approved' | 'rej
  *  ship-to = PO header `location`'s nearest ancestor with custom `state_code` (else tenant address stateCode).
  *  Same state → CGST + SGST (rate/2 each); different → IGST; no vendor state → IGST. */
 export const TAX_MASTER_KEY = 'tax_code';
+
+/** GET /procurement/approved-indent-lines — All approved indent lines (regardless of vendor selection/orderable status).
+ *  Includes PO count raised on each line and current vendor quotes. Used for the "Approved Indents" tab on Create PO page. */
+export interface ApprovedIndentLine {
+  indentLineId: string;
+  indentId: string;
+  indentNumber: string | null;
+  lineNo: number;
+  item: { id: string; code: string; name: string } | null;
+  uom: string | null;
+  location: { id: string; name: string };
+  requiredDate: string | null;
+  /** Total approved qty on this line */
+  approvedQty: string;
+  /** Qty already covered by POs (ordered + pending) */
+  orderedQty: string;
+  /** Remaining qty not yet on any PO */
+  remainingQty: string;
+  /** Number of POs raised on this indent line */
+  poCount: number;
+  /** Current vendor quotes for this indent line (from vendor quotes log) */
+  quotes: {
+    quoteId: string;
+    vendor: { id: string; code: string; name: string };
+    quotedRate: string;
+    leadTimeDays: number | null;
+    validUntil: string | null;
+    expired: boolean;
+  }[];
+}
+
+export const ApprovedIndentQuery = z.object({
+  item: z.string().uuid().optional(),
+  location: z.string().uuid().optional(),
+  q: z.string().trim().min(1).max(200).optional(),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+
+/** POST /procurement/po/from-indent — create PO directly from an approved indent line (even without vendor selection).
+ *  Caller must supply vendor + rate. Under the hood re-uses from-lines but sources from indent. */
+export const PoFromIndent = z.object({
+  picks: z.array(z.object({
+    indentLineId: Uuid,
+    vendorId: Uuid,
+    qty: z.string().regex(/^\d+(\.\d+)?$/),
+    rate: z.string().regex(/^\d+(\.\d+)?$/),
+  })).min(1).max(500),
+  values: z.record(z.string(), z.unknown()).default({}),
+});

@@ -150,3 +150,160 @@ export class PoLinesService {
     return out;
   }
 }
+
+// ---- Approved Indent Lines (for "Approved Indents" tab on Create PO page) ----
+
+export const ApprovedIndentQuery = z.object({
+  item: z.string().uuid().optional(),
+  location: z.string().uuid().optional(),
+  q: z.string().trim().min(1).max(200).optional(),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+
+interface ApprovedIndentRow {
+  id: string; document_id: string; created_at: Date; line_no: number;
+  item_id: string | null; uom_id: string | null; uom_code: string | null;
+  item_code: string | null; item_name: string | null;
+  indent_number: string | null; required_date: string | null;
+  loc_id: string; loc_name: string;
+  approved: string; over_approved: string; ordered: string; short_closed: string;
+  po_count: string;
+}
+
+interface QuoteRow {
+  indent_line_id: string; quote_id: string; vendor_id: string;
+  vendor_code: string | null; vendor_name: string | null;
+  quoted_rate: string; lead_time_days: number | null; valid_until: string | null;
+}
+
+@Injectable()
+export class PoApprovedIndentService {
+  constructor(private readonly docs: DocumentsService, private readonly store: DocStore) {}
+
+  async approvedIndentLines(tx: Tx, actor: DocActor, f: z.infer<typeof ApprovedIndentQuery>): Promise<import('@procure/schema').Page<import('@procure/schema').ApprovedIndentLine>> {
+    if (actor.perms && !actor.perms.keys.includes(docAction(PO, 'add'))) throw AppError.forbidden();
+
+    const conds: Expression<SqlBool>[] = [
+      sql<SqlBool>`l.tenant_id = ${actor.tenantId}`,
+      sql<SqlBool>`not l.is_deleted`,
+      sql<SqlBool>`not d.is_deleted`,
+      sql<SqlBool>`t.key = ${INDENT}`,
+      sql<SqlBool>`d.closed_at is null`,
+      sql<SqlBool>`d.cancelled_at is null`,
+      sql<SqlBool>`d.status_key not in ('draft', 'submitted', 'cancelled', 'closed', 'rejected')`,
+      sql<SqlBool>`l.status_key not in ('draft', 'submitted', 'cancelled', 'closed', 'rejected')`,
+      // Only lines that have been approved (approved + over_approved > 0)
+      sql<SqlBool>`coalesce(s.approved, 0) + coalesce(s.over_approved, 0) > 0`,
+    ];
+
+    if (actor.perms) {
+      conds.push(scopeCondition(sql.ref('n.path'), this.store.scopeFilter(actor, PO)));
+      conds.push(departmentCondition(actor.perms, INDENT, actor.userId, 'd.custom', 'd.created_by'));
+    }
+
+    if (f.item) conds.push(sql<SqlBool>`l.item_id = ${f.item}`);
+    if (f.location) conds.push(sql<SqlBool>`n.path <@ (select path from app.location_node where tenant_id = ${actor.tenantId} and id = ${f.location})`);
+    if (f.q) {
+      const p = likePattern(f.q);
+      conds.push(sql<SqlBool>`(d.number ilike ${p} or it.name ilike ${p} or it.code::text ilike ${p})`);
+    }
+
+    const cur = decodeCursor(f.cursor);
+    if (cur) conds.push(sql<SqlBool>`(l.created_at, l.id) < (${cur.t}::timestamptz, ${cur.id}::uuid)`);
+
+    const r = await sql<ApprovedIndentRow>`
+      select l.id, l.document_id, l.created_at, l.line_no,
+        l.item_id, l.uom_id, u.code as uom_code,
+        it.code as item_code, it.name as item_name,
+        d.number as indent_number, l.required_date,
+        n.id as loc_id, n.name as loc_name,
+        coalesce(s.approved, 0)::text as approved,
+        coalesce(s.over_approved, 0)::text as over_approved,
+        coalesce(s.ordered, 0)::text as ordered,
+        coalesce(s.short_closed, 0)::text as short_closed,
+        (
+          select count(distinct pol.document_id)::text
+          from app.document_line pol
+          join app.document pod on pod.id = pol.document_id
+          join app.doc_type pot on pot.id = pod.doc_type_id
+          where pol.tenant_id = l.tenant_id
+            and pot.key = 'po'
+            and (
+              pol.custom->>'source_line' = l.id::text
+              or pol.custom->>'indent_line' = l.id::text
+            )
+            and pod.cancelled_at is null
+        ) as po_count
+      from app.document_line l
+      join app.document d on d.id = l.document_id
+      join app.doc_type t on t.id = d.doc_type_id
+      join app.location_node n on n.id = d.location_node_id
+      left join app.line_qty_summary s on s.line_id = l.id
+      left join app.master_record it on it.id = l.item_id
+      left join app.master_record u on u.id = l.uom_id
+      where ${sql.join(conds, sql` and `)}
+      order by l.created_at desc, l.id desc
+      limit ${f.limit + 1}
+    `.execute(tx);
+
+    const rows = r.rows;
+    const lineIds = rows.slice(0, f.limit).map(r => r.id);
+
+    // Fetch current quotes for all these indent lines
+    let quoteMap = new Map<string, QuoteRow[]>();
+    if (lineIds.length > 0) {
+      const qr = await sql<QuoteRow>`
+        select q.indent_line_id, q.id as quote_id, q.vendor_id,
+          v.code as vendor_code, v.name as vendor_name,
+          q.quoted_rate::text as quoted_rate,
+          q.lead_time_days, q.valid_until::text as valid_until
+        from app.vendor_quote q
+        join app.master_record v on v.id = q.vendor_id and v.tenant_id = q.tenant_id
+        where q.tenant_id = ${actor.tenantId}
+          and q.indent_line_id = any(${sql.val(lineIds)}::uuid[])
+          and q.is_current = true
+        order by q.created_at desc
+      `.execute(tx);
+      for (const q of qr.rows) {
+        const arr = quoteMap.get(q.indent_line_id) ?? [];
+        arr.push(q);
+        quoteMap.set(q.indent_line_id, arr);
+      }
+    }
+
+    const toItem = (r: ApprovedIndentRow): import('@procure/schema').ApprovedIndentLine => {
+      const approvedQty = fromUnits(toUnits(r.approved) + toUnits(r.over_approved));
+      const orderedQty = fromUnits(toUnits(r.ordered));
+      const shortClosed = toUnits(r.short_closed);
+      const remaining = toUnits(r.approved) + toUnits(r.over_approved) - toUnits(r.ordered) - shortClosed;
+      const remainingQty = fromUnits(remaining < 0n ? 0n : remaining);
+      const now = new Date().toISOString().slice(0, 10);
+      const lineQuotes = (quoteMap.get(r.id) ?? []).map(q => ({
+        quoteId: q.quote_id,
+        vendor: { id: q.vendor_id, code: q.vendor_code ?? '', name: q.vendor_name ?? '' },
+        quotedRate: fromUnits(toUnits(q.quoted_rate)),
+        leadTimeDays: q.lead_time_days,
+        validUntil: q.valid_until ? dateStr(q.valid_until) : null,
+        expired: !!q.valid_until && q.valid_until < now,
+      }));
+      return {
+        indentLineId: r.id,
+        indentId: r.document_id,
+        indentNumber: r.indent_number,
+        lineNo: r.line_no,
+        item: r.item_id ? { id: r.item_id, code: r.item_code ?? '', name: r.item_name ?? '' } : null,
+        uom: r.uom_code,
+        location: { id: r.loc_id, name: r.loc_name },
+        requiredDate: r.required_date ? dateStr(r.required_date) : null,
+        approvedQty,
+        orderedQty,
+        remainingQty,
+        poCount: parseInt(r.po_count ?? '0', 10),
+        quotes: lineQuotes,
+      };
+    };
+
+    return toPage(rows, f.limit, r => ({ t: r.created_at, id: r.id }), r => toItem(r));
+  }
+}
