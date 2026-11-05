@@ -129,8 +129,10 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'items' | 'history'>('items');
   const [dialog, setDialog] = useState<'send_back' | 'forward' | 'help' | null>(null);
   const [bulkReason, setBulkReason] = useState('');
+  const [lineReasonDialog, setLineReasonDialog] = useState<{ lineId: string; lineNo: number; bucket: 'hold' | 'reject' } | null>(null);
   const idemKey = useRef<string>(newIdempotencyKey());
 
   const update = useCallback((lineId: string, fn: (d: LineDraft) => LineDraft) => {
@@ -237,8 +239,8 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
         case 'j': case 'ArrowDown': e.preventDefault(); setActive(i => { const n = Math.min(drafts.length - 1, i + 1); focusRow(n); return n; }); break;
         case 'k': case 'ArrowUp': e.preventDefault(); setActive(i => { const n = Math.max(0, i - 1); focusRow(n); return n; }); break;
         case 'a': if (d) { e.preventDefault(); update(d.lineId, x => setWhole(x, 'approve')); } break;
-        case 'h': if (d && actions.includes('hold')) { e.preventDefault(); update(d.lineId, x => setWhole(x, 'hold')); focusReason(d.lineNo); } break;
-        case 'r': if (d && actions.includes('reject')) { e.preventDefault(); update(d.lineId, x => setWhole(x, 'reject')); focusReason(d.lineNo); } break;
+        case 'h': if (d && actions.includes('hold')) { e.preventDefault(); update(d.lineId, x => setWhole(x, 'hold')); setLineReasonDialog({ lineId: d.lineId, lineNo: d.lineNo, bucket: 'hold' }); } break;
+        case 'r': if (d && actions.includes('reject')) { e.preventDefault(); update(d.lineId, x => setWhole(x, 'reject')); setLineReasonDialog({ lineId: d.lineId, lineNo: d.lineNo, bucket: 'reject' }); } break;
         case 's': if (d) { e.preventDefault(); update(d.lineId, skip); } break;
         case 'x': case ' ': if (d) { e.preventDefault(); setSelected(s => { const n = new Set(s); if (n.has(d.lineId)) n.delete(d.lineId); else n.add(d.lineId); return n; }); } break;
         case 'e': if (d) { e.preventDefault(); document.querySelector<HTMLInputElement>(`[data-testid="decision-${d.lineNo}-approve"]`)?.select(); } break;
@@ -277,6 +279,29 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
         {conflict && <InlineAlert tone="warning" className="mb-4" data-testid="approve-conflict">{conflict}</InlineAlert>}
 
         <div className="w-full">
+            {/* Items / History tab bar */}
+            <div className="mb-4 flex overflow-hidden rounded border border-border w-fit" role="tablist" aria-label={t('approve.linesLabel')}>
+              <button type="button" role="tab" aria-selected={activeTab === 'items'} onClick={() => setActiveTab('items')}
+                className={cn('px-4 py-1.5 text-sm font-semibold transition-colors', activeTab === 'items' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}
+                data-testid="tab-items">
+                {t('approve.tab.items')}
+              </button>
+              <button type="button" role="tab" aria-selected={activeTab === 'history'} onClick={() => setActiveTab('history')}
+                className={cn('border-l border-border px-4 py-1.5 text-sm font-semibold transition-colors', activeTab === 'history' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}
+                data-testid="tab-history">
+                {t('approve.tab.history')}
+                {timeline.data && timeline.data.filter(e => e.kind === 'workflow').length > 0 && (
+                  <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-current/20 px-1.5 text-xs tabular-nums" aria-hidden>
+                    {timeline.data.filter(e => e.kind === 'workflow').length}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {activeTab === 'history' ? (
+              <HistoryTab entries={timeline.data ?? []} lineById={lineById} />
+            ) : (
+            <>
             {/* Item Wise / Doc Wise toggle — always visible above the decision area */}
             <div className="mb-3 flex overflow-hidden rounded border border-border w-fit" role="group" aria-label="Granularity">
               <button type="button"
@@ -338,14 +363,14 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
                         return (
                           <div key={d.lineId} ref={virtualizer.measureElement} data-index={vi.index} className="absolute inset-x-0" style={{ transform: `translateY(${vi.start}px)` }}>
                             <DecisionRow d={d} line={lineById.get(d.lineId)!} index={vi.index} active={vi.index === active} selected={selected.has(d.lineId)} error={errors.get(d.lineId) ?? null}
-                              showErrors={attempted} actions={actions} editable={editable} lineHistory={lineHistoryMap.get(d.lineNo) ?? []} stageKey={stage.key} onActivate={setActive} onUpdate={update} onToggle={onToggle} />
+                              showErrors={attempted} actions={actions} editable={editable} lineHistory={lineHistoryMap.get(d.lineNo) ?? []} stageKey={stage.key} onActivate={setActive} onUpdate={update} onToggle={onToggle} onOpenReasonDialog={(lid, lno, bkt) => setLineReasonDialog({ lineId: lid, lineNo: lno, bucket: bkt })} />
                           </div>
                         );
                       })}
                     </div>
                   ) : drafts.map((d, i) => (
                     <DecisionRow key={d.lineId} d={d} line={lineById.get(d.lineId)!} index={i} active={i === active} selected={selected.has(d.lineId)} error={errors.get(d.lineId) ?? null}
-                      showErrors={attempted} actions={actions} editable={editable} lineHistory={lineHistoryMap.get(d.lineNo) ?? []} stageKey={stage.key} onActivate={setActive} onUpdate={update} onToggle={onToggle} />
+                      showErrors={attempted} actions={actions} editable={editable} lineHistory={lineHistoryMap.get(d.lineNo) ?? []} stageKey={stage.key} onActivate={setActive} onUpdate={update} onToggle={onToggle} onOpenReasonDialog={(lid, lno, bkt) => setLineReasonDialog({ lineId: lid, lineNo: lno, bucket: bkt })} />
                   ))}
                 </div>
 
@@ -357,7 +382,9 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
             )}
 
             {heldLines.length > 0 && (
-              <UnholdPanel lines={heldLines} stageKey={stage.key} busy={busy} canUnhold={allowed.has('unhold')} onUnhold={ids => void unhold(ids)} />
+              <UnholdPanel lines={heldLines} stageKey={stage.key} stageName={stage.name} lineHistoryMap={lineHistoryMap} busy={busy} canUnhold={allowed.has('unhold')} onUnhold={ids => void unhold(ids)} />
+            )}
+            </>
             )}
         </div>
       </div>
@@ -377,6 +404,27 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
       )}
 
       {dialog === 'help' && <ShortcutsDialog onClose={() => setDialog(null)} />}
+      {lineReasonDialog && (() => {
+        const draft = drafts.find(d => d.lineId === lineReasonDialog.lineId);
+        const lineRow = lineById.get(lineReasonDialog.lineId);
+        if (!draft || !lineRow) return null;
+        return (
+          <ReasonDialog
+            bucket={lineReasonDialog.bucket}
+            itemName={lineItemLabel(lineRow)}
+            initialReason={draft.reason}
+            onSave={reason => {
+              update(lineReasonDialog.lineId, x => ({ ...x, reason }));
+              setLineReasonDialog(null);
+            }}
+            onCancel={() => {
+              // Clear the qty that triggered the dialog to keep draft consistent
+              update(lineReasonDialog.lineId, x => setQty(x, lineReasonDialog.bucket, '0'));
+              setLineReasonDialog(null);
+            }}
+          />
+        );
+      })()}
       {dialog === 'send_back' && (
         <SendBackDialog targets={priorStages.map(s => ({ key: s.key, name: s.name }))} onClose={() => setDialog(null)}
           onConfirm={async (toStage, reason) => {
@@ -399,10 +447,6 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
 
 const toggleSel = (set: Dispatch<SetStateAction<Set<string>>>) => (id: string) =>
   set(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-
-function focusReason(lineNo: number) {
-  requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`[data-testid="decision-${lineNo}-reason"]`)?.focus());
-}
 
 // ------------------------------------------------------------------------------------------------ history tab
 
@@ -631,13 +675,13 @@ const ERR_KEY: Record<DraftError, Parameters<typeof t>[0]> = {
   reject_not_allowed: 'approve.err.rejectNotAllowed', partial_not_allowed: 'approve.err.partialNotAllowed',
 };
 
-const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected, error, showErrors, actions, editable, lineHistory, stageKey, onActivate, onUpdate, onToggle }: {
+const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected, error, showErrors, actions, editable, lineHistory, stageKey, onActivate, onUpdate, onToggle, onOpenReasonDialog }: {
   d: LineDraft; line: DocumentLineRow; index: number; active: boolean; selected: boolean; error: DraftError | null; showErrors: boolean;
   actions: readonly string[]; editable: string[]; lineHistory: TimelineEntry[]; stageKey: string;
   onActivate: (i: number) => void; onUpdate: (lineId: string, fn: (d: LineDraft) => LineDraft) => void; onToggle: (id: string) => void;
+  onOpenReasonDialog: (lineId: string, lineNo: number, bucket: 'hold' | 'reject') => void;
 }) {
   const [histOpen, setHistOpen] = useState(false);
-  const [reasonDialog, setReasonDialog] = useState<{ bucket: 'hold' | 'reject' } | null>(null);
   const o = outcome(d);
   const uom = lineUom(line);
   const reduced = dec.gt0(d.approve) && dec.gt0(d.reject);
@@ -653,7 +697,7 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected
   const visibleError = error && (error !== 'reason' || showErrors) ? error : null;
   const sumOff = error === 'sum' || error === 'number';
   const id = `dec-${d.lineNo}`;
-  const openReasonDialog = (bucket: 'hold' | 'reject') => setReasonDialog({ bucket });
+  const openReasonDialog = (bucket: 'hold' | 'reject') => onOpenReasonDialog(d.lineId, d.lineNo, bucket);
   const qtyInput = (b: Bucket) => {
     const disabled = (b === 'hold' && !actions.includes('hold')) || (b === 'reject' && !actions.includes('reject'));
     const label = t(`approve.${b}`);
@@ -741,23 +785,7 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected
         </div>
       )}
 
-      {/* Per-line reason dialog — opens when hold/reject qty is entered without a reason */}
-      {reasonDialog && (
-        <ReasonDialog
-          bucket={reasonDialog.bucket}
-          itemName={lineItemLabel(line)}
-          initialReason={d.reason}
-          onSave={reason => {
-            onUpdate(d.lineId, x => ({ ...x, reason }));
-            setReasonDialog(null);
-          }}
-          onCancel={() => {
-            // Clear the qty that triggered the dialog back to 0 to keep draft consistent
-            onUpdate(d.lineId, x => setQty(x, reasonDialog.bucket, '0'));
-            setReasonDialog(null);
-          }}
-        />
-      )}
+
 
       {/* Item context: last indents, POs, inventory */}
       {typeof line.values.item === 'string' && line.values.item && <ItemContextPanel itemId={line.values.item} uom={lineUom(line)} />}
@@ -962,7 +990,7 @@ export function ItemContextPanel({ itemId, uom, indent = true }: { itemId: strin
 
 // ------------------------------------------------------------------------------------------------ held lines
 
-function UnholdPanel({ lines, stageKey, busy, canUnhold, onUnhold }: { lines: DocumentLineRow[]; stageKey: string; busy: string | null; canUnhold: boolean; onUnhold: (ids: string[]) => void }) {
+function UnholdPanel({ lines, stageKey, stageName, lineHistoryMap, busy, canUnhold, onUnhold }: { lines: DocumentLineRow[]; stageKey: string; stageName: string; lineHistoryMap: Map<number, TimelineEntry[]>; busy: string | null; canUnhold: boolean; onUnhold: (ids: string[]) => void }) {
   return (
     <Card className="mt-4 overflow-hidden" data-testid="unhold-panel">
       <div className="flex items-center gap-2 border-b border-border bg-warning-soft/60 px-3 py-2.5">
@@ -971,20 +999,35 @@ function UnholdPanel({ lines, stageKey, busy, canUnhold, onUnhold }: { lines: Do
         {canUnhold && lines.length > 1 && <Button variant="secondary" size="sm" onClick={() => onUnhold(lines.map(l => l.id))} loading={busy?.startsWith('unhold:') && busy.includes(',')} data-testid="unhold-all"><Play aria-hidden />{t('approve.held.releaseAll')}</Button>}
       </div>
       <ul className="divide-y divide-border">
-        {lines.map(l => (
-          <li key={l.id} className="flex items-center gap-3 px-3 py-2.5" data-testid={`held-row-${l.lineNo}`}>
-            <span className="w-6 text-right text-sm text-fg-subtle tabular-nums">{l.lineNo}</span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">{lineItemLabel(l)}</p>
-              <p className="text-xs text-warning tabular-nums">{t('approve.held.qty', { qty: `${fmtQty(l.stages[stageKey]!.held)} ${lineUom(l)}`.trim() })}</p>
-            </div>
-            {canUnhold && (
-              <Button variant="secondary" size="sm" className="h-10 md:h-8" onClick={() => onUnhold([l.id])} loading={busy === `unhold:${l.id}`} disabled={!!busy} data-testid={`unhold-${l.lineNo}`}>
-                <Play aria-hidden />{t('approve.held.release')}
-              </Button>
-            )}
-          </li>
-        ))}
+        {lines.map(l => {
+          // Find the most recent hold reason for this line at the current stage from the timeline
+          const lineHistory = lineHistoryMap.get(l.lineNo) ?? [];
+          const holdEntry = [...lineHistory].reverse().find(e =>
+            e.lineDecisions?.some(ld => ld.lineNo === l.lineNo && ld.hold && ld.hold !== '0')
+          );
+          const holdDecision = holdEntry?.lineDecisions?.find(ld => ld.lineNo === l.lineNo && ld.hold && ld.hold !== '0');
+          const holdReason = holdDecision?.reason ?? holdEntry?.detail ?? null;
+          return (
+            <li key={l.id} className="flex items-center gap-3 px-3 py-2.5" data-testid={`held-row-${l.lineNo}`}>
+              <span className="w-6 shrink-0 text-right text-sm text-fg-subtle tabular-nums">{l.lineNo}</span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">{lineItemLabel(l)}</p>
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-fg-muted">
+                  <span className="inline-flex items-center gap-1 text-warning tabular-nums">
+                    <PauseCircle className="size-3" aria-hidden />{t('approve.held.qty', { qty: `${fmtQty(l.stages[stageKey]!.held)} ${lineUom(l)}`.trim() })}
+                  </span>
+                  <span className="rounded bg-muted px-1.5 py-0.5 font-medium text-fg-muted" data-testid={`held-row-${l.lineNo}-stage`}>{stageName}</span>
+                  {holdReason && <span className="italic text-fg-subtle truncate max-w-xs" data-testid={`held-row-${l.lineNo}-reason`}>{holdReason}</span>}
+                </div>
+              </div>
+              {canUnhold && (
+                <Button variant="secondary" size="sm" className="h-10 md:h-8 shrink-0" onClick={() => onUnhold([l.id])} loading={busy === `unhold:${l.id}`} disabled={!!busy} data-testid={`unhold-${l.lineNo}`}>
+                  <Play aria-hidden />{t('approve.held.release')}
+                </Button>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </Card>
   );

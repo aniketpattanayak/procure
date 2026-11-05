@@ -2061,6 +2061,7 @@
   "proc.quote.viewRevision": "View revision",
   "proc.quote.revDate": "Logged",
   "proc.quote.revBy": "By",
+  "proc.quote.quotedDate": "Quoted date",
   "proc.slab.title": "Quantity slabs",
   "proc.slab.hint": "Optional. Price breaks by order quantity: a fixed rate or a discount off the quoted rate.",
   "proc.slab.none": "No slabs: the quoted rate applies to any quantity.",

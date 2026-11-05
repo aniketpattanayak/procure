@@ -299,6 +299,12 @@ function RevisionDetailSheet({ revision, uom, onClose }: { revision: VendorQuote
             <p className="text-sm">{fmtDateTime(r.createdAt)}</p>
             <p className="text-xs text-fg-subtle mt-1">{t('proc.quote.revBy')}</p>
             <p className="text-sm">{r.createdBy.name || '—'}</p>
+            {r.loggedAt && (
+              <>
+                <p className="text-xs text-fg-subtle mt-1">{t('proc.quote.quotedDate')}</p>
+                <p className="text-sm">{fmtDate(r.loggedAt.slice(0, 10))}</p>
+              </>
+            )}
           </div>
 
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
@@ -309,6 +315,7 @@ function RevisionDetailSheet({ revision, uom, onClose }: { revision: VendorQuote
             <Fact label={t('proc.cmp.moq')} value={r.moq ? `${fmtQty(r.moq)} ${uom}` : '—'} />
             <Fact label={t('proc.cmp.leadTime')} value={r.leadTimeDays !== undefined && r.leadTimeDays !== null ? t('proc.cmp.days', { n: r.leadTimeDays }) : '—'} />
             <Fact label={t('proc.quote.validUntil')} value={r.validUntil ? fmtDate(r.validUntil) : '—'} />
+            {r.paymentTermsId && <Fact label={t('proc.quote.paymentTerms')} value={r.paymentTermsId} />}
           </dl>
 
           {(r.slabs?.length ?? 0) > 0 && (
