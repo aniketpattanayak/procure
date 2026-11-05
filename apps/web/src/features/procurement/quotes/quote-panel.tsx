@@ -356,7 +356,20 @@ function RevisionDetailSheet({ revision, uom, onClose }: { revision: VendorQuote
 // ---------------------------------------------------------------------------
 export function LineVendorLog({ doc, line }: { doc: DocumentRow; line: DocumentLineRow }) {
   const { currency } = useTenantLocale();
+  const p = usePermissions();
+  const qc = useQueryClient();
   const uom = lineUom(line);
+  const canLog = p.has(PERM.logQuote);
+  const [form, setForm] = useState<{ open: boolean }>({ open: false });
+  const ctx: QuoteLineContext = {
+    lineId: line.id,
+    itemId: typeof line.values.item === 'string' ? line.values.item : null,
+    itemName: lineItemLabel(line),
+    qty: String(line.qty.approved ?? '0'),
+    uom,
+    docNumber: doc.number ?? null,
+    lineNo: line.lineNo,
+  };
   const quotes = useQuery({
     queryKey: procKeys.quotes(line.id, true),
     queryFn: () => procApi.quotes(line.id, true),
@@ -368,7 +381,23 @@ export function LineVendorLog({ doc, line }: { doc: DocumentRow; line: DocumentL
   const groups = groupByVendor(quotes.data ?? []);
 
   if (groups.length === 0) {
-    return <p className="py-3 text-center text-xs text-fg-muted">{t('proc.quotes.empty')}</p>;
+    return (
+      <div className="py-3 text-center">
+        <p className="text-xs text-fg-muted">{t('proc.quotes.empty')}</p>
+        {canLog && (
+          <>
+            <Button size="sm" variant="secondary" className="mt-2 gap-1" onClick={() => setForm({ open: true })}>
+              <Plus className="size-3" aria-hidden />Add vendor quote
+            </Button>
+            {form.open && (
+              <QuoteFormDialog open onOpenChange={o => !o && setForm({ open: false })} line={ctx} editing={null}
+                vendorSuggestions={[]} currency={currency}
+                onSaved={() => { setForm({ open: false }); void qc.invalidateQueries({ queryKey: procKeys.quotes(line.id, true) }); }} />
+            )}
+          </>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -387,6 +416,18 @@ export function LineVendorLog({ doc, line }: { doc: DocumentRow; line: DocumentL
           </ul>
         </div>
       ))}
+      {canLog && (
+        <div className="pt-1">
+          <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs" onClick={() => setForm({ open: true })}>
+            <Plus className="size-3" aria-hidden />Add vendor quote
+          </Button>
+          {form.open && (
+            <QuoteFormDialog open onOpenChange={o => !o && setForm({ open: false })} line={ctx} editing={null}
+              vendorSuggestions={[]} currency={currency}
+              onSaved={() => { setForm({ open: false }); void qc.invalidateQueries({ queryKey: procKeys.quotes(line.id, true) }); }} />
+          )}
+        </div>
+      )}
     </div>
   );
 }
