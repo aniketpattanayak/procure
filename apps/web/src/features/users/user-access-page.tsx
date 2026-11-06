@@ -16,6 +16,7 @@ import { isApiError } from '@/lib/api';
 import { perm, usePermissions } from '@/lib/permissions';
 import { useSession } from '@/lib/session';
 import { rolesApi, usersApi } from './api';
+import { DepartmentAccess } from './department-access';
 
 /** User access: role assignment, per-user overrides, data scope and the "why" view. */
 export function UserAccessPage({ userId }: { userId: string }) {
@@ -42,6 +43,7 @@ export function UserAccessPage({ userId }: { userId: string }) {
           <TabsList>
             {canManage && <TabsTrigger value="permissions" data-testid="access-tab-permissions">{t('perm.tabPermissions')}</TabsTrigger>}
             {canManage && <TabsTrigger value="scope" data-testid="access-tab-scope">{t('perm.tabScope')}</TabsTrigger>}
+            {canManage && <TabsTrigger value="departments" data-testid="access-tab-departments">{t('access.dept.tab')}</TabsTrigger>}
             <TabsTrigger value="why" data-testid="access-tab-why">{t('perm.tabWhy')}</TabsTrigger>
           </TabsList>
           {canManage && (
@@ -52,6 +54,11 @@ export function UserAccessPage({ userId }: { userId: string }) {
           {canManage && (
             <TabsContent value="scope">
               <ScopeEditor subject={{ kind: 'user', id: u.id }} isTenantAdmin={u.isTenantAdmin} />
+            </TabsContent>
+          )}
+          {canManage && (
+            <TabsContent value="departments">
+              <DepartmentAccess userId={u.id} isTenantAdmin={u.isTenantAdmin} />
             </TabsContent>
           )}
           <TabsContent value="why"><EffectivePanel userId={u.id} /></TabsContent>

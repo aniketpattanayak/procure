@@ -317,6 +317,11 @@ export function ReadValue({ field, value, scope, testId }: { field: ControlField
     case 'select': case 'radio': text = field.options.find(o => o.value === value)?.label ?? String(value); break;
     case 'multiselect': text = (value as string[]).map(v => field.options.find(o => o.value === v)?.label ?? v).join(', '); break;
     case 'lookup': case 'multilookup': {
+      // For allowCustom single lookup: if value is a plain (non-UUID) string, display it directly.
+      const isAllowCustom = field.type === 'lookup' && (field as { allowCustom?: boolean }).allowCustom;
+      if (isAllowCustom && typeof value === 'string' && value && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+        text = value; break;
+      }
       const ids = Array.isArray(value) ? (value as string[]) : [value as string];
       const path = scope.grid ? `${scope.grid}.${field.key}` : field.key;
       const labels = ids.map(id => ctx.optionFor(id)?.label ?? ctx.labelFromRefs(path, id));

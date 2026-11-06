@@ -1,10 +1,11 @@
 'use client';
-import type { DocTypeSummary, DocumentLineRow, DocumentRow, WorkflowActionInput } from '@procure/schema';
+import type { DocListRow, DocTypeSummary, DocumentLineRow, DocumentRow, TimelineEntry, WorkflowActionInput } from '@procure/schema';
 import {
-  Button, Card, Checkbox, cn, EmptyState, Input, Textarea, toast, useVirtualizer,
+  Badge, Button, Card, Checkbox, cn, Dialog, DialogContent, EmptyState, Input, Textarea, toast, useVirtualizer,
 } from '@procure/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle2, CircleSlash, Clock, Forward, Keyboard, Lock, PauseCircle, Play, Undo2, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronDown, ChevronUp, CircleSlash, Clock, Forward, Keyboard, Lock, Package, PauseCircle, Play, ShoppingCart, Undo2, XCircle } from 'lucide-react';
+import { stockApi, stockKeys } from '@/features/stock/api';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
@@ -71,8 +72,27 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
   const actions = useMemo(() => doc.workflow?.stageActions?.[stage.key] ?? ['approve', 'reject', 'hold', 'send_back'], [doc.workflow, stage.key]);
   const allowed = new Set(doc.allowedActions);
   // The runtime view doesn't carry granularity yet: if the server says "send outcome", switch to document mode.
+  // userGranularity: null = follow server, 'line' = Item Wise, 'document' = Doc Wise
   const [forceDocument, setForceDocument] = useState(false);
-  const granularity = forceDocument ? 'document' : granularityOf(doc, stage);
+  const [userGranularity, setUserGranularity] = useState<'line' | 'document' | null>(null);
+  const serverGranularity = forceDocument ? 'document' : granularityOf(doc, stage);
+  const granularity = userGranularity ?? serverGranularity;
+
+  // Timeline — fetch once to power per-item history accordion
+  const timeline = useQuery({ queryKey: [...docKeys.detail(type, doc.id), 'timeline'], queryFn: () => docsApi.timeline(type, doc.id), staleTime: 30_000 });
+  /** lineNo → workflow timeline entries that touched that line */
+  const lineHistoryMap = useMemo<Map<number, TimelineEntry[]>>(() => {
+    const map = new Map<number, TimelineEntry[]>();
+    if (!timeline.data) return map;
+    for (const entry of timeline.data) {
+      if (entry.kind !== 'workflow' || !entry.lineDecisions?.length) continue;
+      for (const ld of entry.lineDecisions) {
+        if (!map.has(ld.lineNo)) map.set(ld.lineNo, []);
+        map.get(ld.lineNo)!.push(entry);
+      }
+    }
+    return map;
+  }, [timeline.data]);
   const editable = useMemo(() => editableFieldsOf(doc, stage), [doc, stage]);
 
   const lineById = useMemo(() => new Map(doc.lines.map(l => [l.id, l])), [doc.lines]);
@@ -109,8 +129,10 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'items' | 'history'>('items');
   const [dialog, setDialog] = useState<'send_back' | 'forward' | 'help' | null>(null);
   const [bulkReason, setBulkReason] = useState('');
+  const [lineReasonDialog, setLineReasonDialog] = useState<{ lineId: string; lineNo: number; bucket: 'hold' | 'reject' } | null>(null);
   const idemKey = useRef<string>(newIdempotencyKey());
 
   const update = useCallback((lineId: string, fn: (d: LineDraft) => LineDraft) => {
@@ -217,8 +239,8 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
         case 'j': case 'ArrowDown': e.preventDefault(); setActive(i => { const n = Math.min(drafts.length - 1, i + 1); focusRow(n); return n; }); break;
         case 'k': case 'ArrowUp': e.preventDefault(); setActive(i => { const n = Math.max(0, i - 1); focusRow(n); return n; }); break;
         case 'a': if (d) { e.preventDefault(); update(d.lineId, x => setWhole(x, 'approve')); } break;
-        case 'h': if (d && actions.includes('hold')) { e.preventDefault(); update(d.lineId, x => setWhole(x, 'hold')); focusReason(d.lineNo); } break;
-        case 'r': if (d && actions.includes('reject')) { e.preventDefault(); update(d.lineId, x => setWhole(x, 'reject')); focusReason(d.lineNo); } break;
+        case 'h': if (d && actions.includes('hold')) { e.preventDefault(); update(d.lineId, x => setWhole(x, 'hold')); setLineReasonDialog({ lineId: d.lineId, lineNo: d.lineNo, bucket: 'hold' }); } break;
+        case 'r': if (d && actions.includes('reject')) { e.preventDefault(); update(d.lineId, x => setWhole(x, 'reject')); setLineReasonDialog({ lineId: d.lineId, lineNo: d.lineNo, bucket: 'reject' }); } break;
         case 's': if (d) { e.preventDefault(); update(d.lineId, skip); } break;
         case 'x': case ' ': if (d) { e.preventDefault(); setSelected(s => { const n = new Set(s); if (n.has(d.lineId)) n.delete(d.lineId); else n.add(d.lineId); return n; }); } break;
         case 'e': if (d) { e.preventDefault(); document.querySelector<HTMLInputElement>(`[data-testid="decision-${d.lineNo}-approve"]`)?.select(); } break;
@@ -256,73 +278,115 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
 
         {conflict && <InlineAlert tone="warning" className="mb-4" data-testid="approve-conflict">{conflict}</InlineAlert>}
 
-        {granularity === 'document' ? (
-          <DocumentDecision doc={doc} stage={stage} actions={actions} busy={!!busy} onDecide={async (o, reason) => {
-            const next = await run('decide', { action: 'decide', stageKey: stage.key, decisions: [], outcome: o, ...(reason ? { comment: reason } : {}) });
-            if (next) { toast.success(t('approve.docDone')); afterAction(next); }
-          }} />
-        ) : drafts.length === 0 ? (
-          heldLines.length === 0 && <EmptyState icon={<CheckCircle2 />} title={t('approve.nothing.title')} description={t('approve.nothing.hint')} />
-        ) : (
-          <Card className="overflow-hidden">
-            {/* Toolbar: select all, apply to selected/all, shortcuts, send back, forward */}
-            <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5" data-testid="decision-apply-all">
-              <label className="mr-1 flex items-center gap-2 text-sm">
-                <Checkbox checked={allSelected ? true : selected.size ? 'indeterminate' : false} onCheckedChange={v => setSelected(v ? new Set(drafts.map(d => d.lineId)) : new Set())} aria-label={t('approve.selectAll')} data-testid="decision-select-all" />
-                <span className="hidden text-fg-muted sm:inline">{selected.size ? t('approve.applyToN', { n: selected.size }) : t('approve.applyToAll')}</span>
-              </label>
-              <div className="flex gap-1">
-                <QuickButton tone="approve" label={t('approve.approve')} onClick={() => applyAll('approve')} testId="decision-apply-all-approve" wide />
-                {actions.includes('hold') && <QuickButton tone="hold" label={t('approve.hold')} onClick={() => applyAll('hold')} testId="decision-apply-all-hold" wide />}
-                {actions.includes('reject') && <QuickButton tone="reject" label={t('approve.reject')} onClick={() => applyAll('reject')} testId="decision-apply-all-reject" wide />}
-                <Button variant="ghost" size="sm" onClick={() => applyAll('skip')} data-testid="decision-apply-all-skip">{t('approve.skip')}</Button>
-              </div>
-              <Input value={bulkReason} onChange={e => setBulkReason(e.target.value)} placeholder={t('approve.bulkReason')} aria-label={t('approve.bulkReason')} className="h-8 w-full sm:w-56" data-testid="decision-apply-all-reason" />
-              <div className="ml-auto flex items-center gap-1">
-                <Button variant="ghost" size="sm" onClick={() => setDialog('help')} className="hidden md:inline-flex" aria-keyshortcuts="?" data-testid="decision-help-open"><Keyboard aria-hidden />{t('approve.shortcuts')}</Button>
-                {canSendBack && <Button variant="secondary" size="sm" onClick={() => setDialog('send_back')} data-testid="send-back"><Undo2 aria-hidden />{t('approve.sendBack.button')}</Button>}
-                {canForward && <Button variant="secondary" size="sm" onClick={() => setDialog('forward')} data-testid="forward"><Forward aria-hidden />{t('approve.forward.button')}</Button>}
-              </div>
+        <div className="w-full">
+            {/* Items / History tab bar */}
+            <div className="mb-4 flex overflow-hidden rounded border border-border w-fit" role="tablist" aria-label={t('approve.linesLabel')}>
+              <button type="button" role="tab" aria-selected={activeTab === 'items'} onClick={() => setActiveTab('items')}
+                className={cn('px-4 py-1.5 text-sm font-semibold transition-colors', activeTab === 'items' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}
+                data-testid="tab-items">
+                {t('approve.tab.items')}
+              </button>
+              <button type="button" role="tab" aria-selected={activeTab === 'history'} onClick={() => setActiveTab('history')}
+                className={cn('border-l border-border px-4 py-1.5 text-sm font-semibold transition-colors', activeTab === 'history' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}
+                data-testid="tab-history">
+                {t('approve.tab.history')}
+                {timeline.data && timeline.data.filter(e => e.kind === 'workflow').length > 0 && (
+                  <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-current/20 px-1.5 text-xs tabular-nums" aria-hidden>
+                    {timeline.data.filter(e => e.kind === 'workflow').length}
+                  </span>
+                )}
+              </button>
             </div>
 
-            {/* Column header (wide screens) */}
-            <div className="hidden grid-cols-[2rem_2.25rem_minmax(10rem,1fr)_7rem_7.5rem_7.5rem_7.5rem_8.5rem] items-center gap-x-3 border-b border-border bg-subtle px-3 py-2 text-sm font-medium text-fg-muted md:grid" aria-hidden>
-              <span /><span className="text-right">#</span><span>{t('docs.col.item')}</span><span className="text-right">{t('approve.pendingHere')}</span>
-              <span className="text-right text-success">{t('approve.approve')}</span><span className="text-right text-warning">{t('approve.hold')}</span><span className="text-right text-danger">{t('approve.reject')}</span><span />
+            {activeTab === 'history' ? (
+              <HistoryTab entries={timeline.data ?? []} lineById={lineById} />
+            ) : (
+            <>
+            {/* Item Wise / Doc Wise toggle — always visible above the decision area */}
+            <div className="mb-3 flex overflow-hidden rounded border border-border w-fit" role="group" aria-label="Granularity">
+              <button type="button"
+                onClick={() => setUserGranularity('line')}
+                aria-pressed={granularity === 'line'}
+                className={cn('px-4 py-1.5 text-sm font-semibold transition-colors', granularity === 'line' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}
+                data-testid="granularity-item-wise">
+                Item Wise
+              </button>
+              <button type="button"
+                onClick={() => setUserGranularity('document')}
+                aria-pressed={granularity === 'document'}
+                className={cn('border-l border-border px-4 py-1.5 text-sm font-semibold transition-colors', granularity === 'document' ? 'bg-accent text-white' : 'bg-surface text-fg-muted hover:bg-subtle')}
+                data-testid="granularity-doc-wise">
+                Doc Wise
+              </button>
             </div>
 
-            <div ref={listRef} role="list" aria-label={t('approve.linesLabel')} className={cn(virtual && 'overflow-y-auto')} style={virtual ? { maxHeight: 'calc(100dvh - 22rem)', minHeight: 320 } : undefined}>
-              {virtual ? (
-                <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
-                  {vItems!.map(vi => {
-                    const d = drafts[vi.index]!;
-                    return (
-                      <div key={d.lineId} ref={virtualizer.measureElement} data-index={vi.index} className="absolute inset-x-0" style={{ transform: `translateY(${vi.start}px)` }}>
-                        <DecisionRow d={d} line={lineById.get(d.lineId)!} index={vi.index} active={vi.index === active} selected={selected.has(d.lineId)} error={errors.get(d.lineId) ?? null}
-                          showErrors={attempted} actions={actions} editable={editable} onActivate={setActive} onUpdate={update} onToggle={onToggle} />
-                      </div>
-                    );
-                  })}
+            {granularity === 'document' ? (
+              <DocumentDecision doc={doc} stage={stage} actions={actions} busy={!!busy} onDecide={async (o, reason) => {
+                const next = await run('decide', { action: 'decide', stageKey: stage.key, decisions: [], outcome: o, ...(reason ? { comment: reason } : {}) });
+                if (next) { toast.success(t('approve.docDone')); afterAction(next); }
+              }} />
+            ) : drafts.length === 0 ? (
+              heldLines.length === 0 && <EmptyState icon={<CheckCircle2 />} title={t('approve.nothing.title')} description={t('approve.nothing.hint')} />
+            ) : (
+              <Card className="overflow-hidden">
+                {/* Toolbar: select all, apply to selected/all, shortcuts, send back, forward */}
+                <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5" data-testid="decision-apply-all">
+                  <label className="mr-1 flex items-center gap-2 text-sm">
+                    <Checkbox checked={allSelected ? true : selected.size ? 'indeterminate' : false} onCheckedChange={v => setSelected(v ? new Set(drafts.map(d => d.lineId)) : new Set())} aria-label={t('approve.selectAll')} data-testid="decision-select-all" />
+                    <span className="hidden text-fg-muted sm:inline">{selected.size ? t('approve.applyToN', { n: selected.size }) : t('approve.applyToAll')}</span>
+                  </label>
+                  <div className="flex gap-1">
+                    <QuickButton tone="approve" label={t('approve.approve')} onClick={() => applyAll('approve')} testId="decision-apply-all-approve" wide />
+                    {actions.includes('hold') && <QuickButton tone="hold" label={t('approve.hold')} onClick={() => applyAll('hold')} testId="decision-apply-all-hold" wide />}
+                    {actions.includes('reject') && <QuickButton tone="reject" label={t('approve.reject')} onClick={() => applyAll('reject')} testId="decision-apply-all-reject" wide />}
+                    <Button variant="ghost" size="sm" onClick={() => applyAll('skip')} data-testid="decision-apply-all-skip">{t('approve.skip')}</Button>
+                  </div>
+                  <Input value={bulkReason} onChange={e => setBulkReason(e.target.value)} placeholder={t('approve.bulkReason')} aria-label={t('approve.bulkReason')} className="h-8 w-full sm:w-56" data-testid="decision-apply-all-reason" />
+                  <div className="ml-auto flex items-center gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => setDialog('help')} className="hidden md:inline-flex" aria-keyshortcuts="?" data-testid="decision-help-open"><Keyboard aria-hidden />{t('approve.shortcuts')}</Button>
+                    {canSendBack && <Button variant="secondary" size="sm" onClick={() => setDialog('send_back')} data-testid="send-back"><Undo2 aria-hidden />{t('approve.sendBack.button')}</Button>}
+                    {canForward && <Button variant="secondary" size="sm" onClick={() => setDialog('forward')} data-testid="forward"><Forward aria-hidden />{t('approve.forward.button')}</Button>}
+                  </div>
                 </div>
-              ) : drafts.map((d, i) => (
-                <DecisionRow key={d.lineId} d={d} line={lineById.get(d.lineId)!} index={i} active={i === active} selected={selected.has(d.lineId)} error={errors.get(d.lineId) ?? null}
-                  showErrors={attempted} actions={actions} editable={editable} onActivate={setActive} onUpdate={update} onToggle={onToggle} />
-              ))}
-            </div>
 
-            <div className="border-t border-border px-3 py-3">
-              <label htmlFor="approve-comment" className="text-sm font-medium">{t('approve.comment')} <span className="font-normal text-fg-subtle">({t('common.optional')})</span></label>
-              <Textarea id="approve-comment" rows={2} value={comment} onChange={e => setComment(e.target.value)} maxLength={2000} className="mt-1.5" data-testid="decision-comment" />
-            </div>
-          </Card>
-        )}
+                {/* Column header (wide screens) */}
+                <div className="hidden grid-cols-[2rem_2.25rem_minmax(10rem,1fr)_7rem_7.5rem_7.5rem_7.5rem_8.5rem] items-center gap-x-3 border-b border-border bg-subtle px-3 py-2 text-sm font-medium text-fg-muted md:grid" aria-hidden>
+                  <span /><span className="text-right">#</span><span>{t('docs.col.item')}</span><span className="text-right">{t('approve.pendingHere')}</span>
+                  <span className="text-right text-success">{t('approve.approve')}</span><span className="text-right text-warning">{t('approve.hold')}</span><span className="text-right text-danger">{t('approve.reject')}</span><span />
+                </div>
 
-        {heldLines.length > 0 && allowed.has('unhold') && (
-          <UnholdPanel lines={heldLines} stageKey={stage.key} busy={busy} onUnhold={ids => void unhold(ids)} />
-        )}
-        {heldLines.length > 0 && granularity === 'line' && drafts.length === 0 && !allowed.has('unhold') && (
-          <InlineAlert tone="info" className="mt-4">{t('approve.heldNoUnhold', { n: heldLines.length })}</InlineAlert>
-        )}
+                <div ref={listRef} role="list" aria-label={t('approve.linesLabel')} className={cn(virtual && 'overflow-y-auto')} style={virtual ? { maxHeight: 'calc(100dvh - 22rem)', minHeight: 320 } : undefined}>
+                  {virtual ? (
+                    <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
+                      {vItems!.map(vi => {
+                        const d = drafts[vi.index]!;
+                        return (
+                          <div key={d.lineId} ref={virtualizer.measureElement} data-index={vi.index} className="absolute inset-x-0" style={{ transform: `translateY(${vi.start}px)` }}>
+                            <DecisionRow d={d} line={lineById.get(d.lineId)!} index={vi.index} active={vi.index === active} selected={selected.has(d.lineId)} error={errors.get(d.lineId) ?? null}
+                              showErrors={attempted} actions={actions} editable={editable} lineHistory={lineHistoryMap.get(d.lineNo) ?? []} stageKey={stage.key} onActivate={setActive} onUpdate={update} onToggle={onToggle} onOpenReasonDialog={(lid, lno, bkt) => setLineReasonDialog({ lineId: lid, lineNo: lno, bucket: bkt })} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : drafts.map((d, i) => (
+                    <DecisionRow key={d.lineId} d={d} line={lineById.get(d.lineId)!} index={i} active={i === active} selected={selected.has(d.lineId)} error={errors.get(d.lineId) ?? null}
+                      showErrors={attempted} actions={actions} editable={editable} lineHistory={lineHistoryMap.get(d.lineNo) ?? []} stageKey={stage.key} onActivate={setActive} onUpdate={update} onToggle={onToggle} onOpenReasonDialog={(lid, lno, bkt) => setLineReasonDialog({ lineId: lid, lineNo: lno, bucket: bkt })} />
+                  ))}
+                </div>
+
+                <div className="border-t border-border px-3 py-3">
+                  <label htmlFor="approve-comment" className="text-sm font-medium">{t('approve.comment')} <span className="font-normal text-fg-subtle">({t('common.optional')})</span></label>
+                  <Textarea id="approve-comment" rows={2} value={comment} onChange={e => setComment(e.target.value)} maxLength={2000} className="mt-1.5" data-testid="decision-comment" />
+                </div>
+              </Card>
+            )}
+
+            {heldLines.length > 0 && (
+              <UnholdPanel lines={heldLines} stageKey={stage.key} stageName={stage.name} lineHistoryMap={lineHistoryMap} busy={busy} canUnhold={allowed.has('unhold')} onUnhold={ids => void unhold(ids)} />
+            )}
+            </>
+            )}
+        </div>
       </div>
 
       {granularity === 'line' && drafts.length > 0 && (
@@ -340,6 +404,27 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
       )}
 
       {dialog === 'help' && <ShortcutsDialog onClose={() => setDialog(null)} />}
+      {lineReasonDialog && (() => {
+        const draft = drafts.find(d => d.lineId === lineReasonDialog.lineId);
+        const lineRow = lineById.get(lineReasonDialog.lineId);
+        if (!draft || !lineRow) return null;
+        return (
+          <ReasonDialog
+            bucket={lineReasonDialog.bucket}
+            itemName={lineItemLabel(lineRow)}
+            initialReason={draft.reason}
+            onSave={reason => {
+              update(lineReasonDialog.lineId, x => ({ ...x, reason }));
+              setLineReasonDialog(null);
+            }}
+            onCancel={() => {
+              // Clear the qty that triggered the dialog to keep draft consistent
+              update(lineReasonDialog.lineId, x => setQty(x, lineReasonDialog.bucket, '0'));
+              setLineReasonDialog(null);
+            }}
+          />
+        );
+      })()}
       {dialog === 'send_back' && (
         <SendBackDialog targets={priorStages.map(s => ({ key: s.key, name: s.name }))} onClose={() => setDialog(null)}
           onConfirm={async (toStage, reason) => {
@@ -363,8 +448,175 @@ function Screen({ docType, doc, stage }: { docType: DocTypeSummary; doc: Documen
 const toggleSel = (set: Dispatch<SetStateAction<Set<string>>>) => (id: string) =>
   set(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
-function focusReason(lineNo: number) {
-  requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`[data-testid="decision-${lineNo}-reason"]`)?.focus());
+// ------------------------------------------------------------------------------------------------ history tab
+
+interface HistoryRow {
+  entryId: string;
+  at: string;
+  actorName: string;
+  stageTitle: string;
+  lineNo: number;
+  itemLabel: string;
+  action: 'approved' | 'held' | 'rejected' | 'mixed';
+  qty: string;
+  reason: string;
+}
+
+export function HistoryTab({ entries, lineById }: { entries: TimelineEntry[]; lineById: Map<string, DocumentLineRow> }) {
+  // Build a map from lineNo to line for label lookup
+  const lineByNo = useMemo(() => {
+    const m = new Map<number, DocumentLineRow>();
+    for (const l of lineById.values()) m.set(l.lineNo, l);
+    return m;
+  }, [lineById]);
+
+  const rows = useMemo<HistoryRow[]>(() => {
+    const result: HistoryRow[] = [];
+    // Most recent first: reverse the timeline before expanding
+    const wfEntries = [...entries].filter(e => e.kind === 'workflow' && e.lineDecisions?.length).reverse();
+    for (const entry of wfEntries) {
+      for (const ld of entry.lineDecisions ?? []) {
+        const hasApprove = !!ld.approve && ld.approve !== '0';
+        const hasHold = !!ld.hold && ld.hold !== '0';
+        const hasReject = !!ld.reject && ld.reject !== '0';
+        let action: HistoryRow['action'];
+        if (hasApprove && !hasHold && !hasReject) action = 'approved';
+        else if (hasHold && !hasApprove && !hasReject) action = 'held';
+        else if (hasReject && !hasApprove && !hasHold) action = 'rejected';
+        else action = 'mixed';
+
+        const qtyParts: string[] = [];
+        if (hasApprove) qtyParts.push(fmtQty(ld.approve!));
+        if (hasHold) qtyParts.push(fmtQty(ld.hold!));
+        if (hasReject) qtyParts.push(fmtQty(ld.reject!));
+
+        const line = lineByNo.get(ld.lineNo);
+        result.push({
+          entryId: `${entry.id}:${ld.lineNo}`,
+          at: entry.at,
+          actorName: entry.actor?.name ?? '—',
+          stageTitle: entry.title,
+          lineNo: ld.lineNo,
+          itemLabel: line ? lineItemLabel(line) : `Line ${ld.lineNo}`,
+          action,
+          qty: qtyParts.join(' / ') || '—',
+          reason: ld.reason ?? entry.detail ?? '',
+        });
+      }
+    }
+    return result;
+  }, [entries, lineByNo]);
+
+  if (rows.length === 0) {
+    return (
+      <EmptyState icon={<CheckCircle2 />} title={t('approve.history.empty')} description="" data-testid="approve-history-empty" />
+    );
+  }
+
+  const actionTone = (a: HistoryRow['action']) => {
+    if (a === 'approved') return 'success' as const;
+    if (a === 'held') return 'warning' as const;
+    if (a === 'rejected') return 'danger' as const;
+    return 'neutral' as const;
+  };
+
+  const actionLabel = (a: HistoryRow['action']) => {
+    if (a === 'approved') return t('approve.history.action.approved');
+    if (a === 'held') return t('approve.history.action.held');
+    if (a === 'rejected') return t('approve.history.action.rejected');
+    return t('approve.history.action.mixed');
+  };
+
+  return (
+    <Card className="overflow-hidden" data-testid="approve-history-table">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-subtle text-left text-xs font-medium text-fg-muted">
+              <th className="px-4 py-2.5 whitespace-nowrap">{t('approve.history.col.date')}</th>
+              <th className="px-4 py-2.5">{t('approve.history.col.approver')}</th>
+              <th className="px-4 py-2.5">{t('approve.history.col.stage')}</th>
+              <th className="px-4 py-2.5">{t('approve.history.col.item')}</th>
+              <th className="px-4 py-2.5">{t('approve.history.col.action')}</th>
+              <th className="px-4 py-2.5 text-right">{t('approve.history.col.qty')}</th>
+              <th className="px-4 py-2.5">{t('approve.history.col.reason')}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {rows.map(row => (
+              <tr key={row.entryId} className="hover:bg-subtle" data-testid="approve-history-row">
+                <td className="px-4 py-2.5 tabular-nums text-fg-muted whitespace-nowrap text-xs">
+                  {new Date(row.at).toLocaleString()}
+                </td>
+                <td className="px-4 py-2.5 font-medium text-fg whitespace-nowrap">{row.actorName}</td>
+                <td className="px-4 py-2.5 text-fg-muted text-xs max-w-[160px] truncate" title={row.stageTitle}>{row.stageTitle}</td>
+                <td className="px-4 py-2.5 text-fg max-w-[200px] truncate" title={row.itemLabel}>
+                  <span className="mr-1.5 text-fg-subtle tabular-nums text-xs">{row.lineNo}</span>{row.itemLabel}
+                </td>
+                <td className="px-4 py-2.5">
+                  <Badge tone={actionTone(row.action)}>{actionLabel(row.action)}</Badge>
+                </td>
+                <td className="px-4 py-2.5 tabular-nums text-right text-fg whitespace-nowrap">{row.qty}</td>
+                <td className="px-4 py-2.5 text-fg-muted text-xs max-w-[200px] truncate italic" title={row.reason || undefined}>{row.reason || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+// ------------------------------------------------------------------------------------------------ per-line reason dialog
+
+interface ReasonDialogProps {
+  bucket: 'hold' | 'reject';
+  itemName: string;
+  initialReason: string;
+  onSave: (reason: string) => void;
+  onCancel: () => void;
+}
+
+function ReasonDialog({ bucket, itemName, initialReason, onSave, onCancel }: ReasonDialogProps) {
+  const [reason, setReason] = useState(initialReason);
+  const [tried, setTried] = useState(false);
+  const label = bucket === 'hold' ? t('approve.hold') : t('approve.reject');
+  const title = `${t('common.reason')} for ${label} — ${itemName}`;
+  const ok = reason.trim().length >= 3;
+  const save = () => { setTried(true); if (ok) onSave(reason.trim()); };
+  return (
+    <Dialog open onOpenChange={open => { if (!open) onCancel(); }}>
+      <DialogContent
+        title={title}
+        size="sm"
+        data-testid="reason-dialog"
+        footer={
+          <>
+            <Button variant="secondary" onClick={onCancel} data-testid="reason-dialog-cancel">{t('common.cancel')}</Button>
+            <Button onClick={save} data-testid="reason-dialog-save">{t('common.done')}</Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-fg-muted">
+            {bucket === 'hold' ? t('approve.reasonHold') : t('approve.reasonReject')}
+          </p>
+          <Textarea
+            autoFocus
+            rows={3}
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            maxLength={500}
+            aria-invalid={(tried && !ok) || undefined}
+            className={cn(tried && !ok && 'border-danger')}
+            data-testid="reason-dialog-input"
+            onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) save(); }}
+          />
+          {tried && !ok && <p role="alert" className="text-xs font-medium text-danger">{t('validation.reasonMin')}</p>}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function SummaryText({ s }: { s: ReturnType<typeof summarize> }) {
@@ -423,21 +675,33 @@ const ERR_KEY: Record<DraftError, Parameters<typeof t>[0]> = {
   reject_not_allowed: 'approve.err.rejectNotAllowed', partial_not_allowed: 'approve.err.partialNotAllowed',
 };
 
-const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected, error, showErrors, actions, editable, onActivate, onUpdate, onToggle }: {
+const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected, error, showErrors, actions, editable, lineHistory, stageKey, onActivate, onUpdate, onToggle, onOpenReasonDialog }: {
   d: LineDraft; line: DocumentLineRow; index: number; active: boolean; selected: boolean; error: DraftError | null; showErrors: boolean;
-  actions: readonly string[]; editable: string[];
+  actions: readonly string[]; editable: string[]; lineHistory: TimelineEntry[]; stageKey: string;
   onActivate: (i: number) => void; onUpdate: (lineId: string, fn: (d: LineDraft) => LineDraft) => void; onToggle: (id: string) => void;
+  onOpenReasonDialog: (lineId: string, lineNo: number, bucket: 'hold' | 'reject') => void;
 }) {
+  const [histOpen, setHistOpen] = useState(false);
   const o = outcome(d);
   const uom = lineUom(line);
   const reduced = dec.gt0(d.approve) && dec.gt0(d.reject);
+  // Sum held qty from all OTHER stages (previous stages that still carry a hold on this line)
+  const prevHeld = useMemo(() => {
+    let total = '0';
+    for (const [sk, sv] of Object.entries(line.stages)) {
+      if (sk !== stageKey && dec.gt0(sv.held)) total = dec.add(total, sv.held);
+    }
+    return dec.gt0(total) ? total : null;
+  }, [line.stages, stageKey]);
   // Sum errors show live (they are about the numbers just typed); missing reasons once the user tries to submit.
   const visibleError = error && (error !== 'reason' || showErrors) ? error : null;
   const sumOff = error === 'sum' || error === 'number';
   const id = `dec-${d.lineNo}`;
+  const openReasonDialog = (bucket: 'hold' | 'reject') => onOpenReasonDialog(d.lineId, d.lineNo, bucket);
   const qtyInput = (b: Bucket) => {
     const disabled = (b === 'hold' && !actions.includes('hold')) || (b === 'reject' && !actions.includes('reject'));
     const label = t(`approve.${b}`);
+    const needsDialogOnBlur = (b === 'hold' || b === 'reject') && !disabled;
     return (
       <div className="min-w-0">
         <label htmlFor={`${id}-${b}`} className={cn('mb-1 block text-xs font-medium md:sr-only', b === 'approve' ? 'text-success' : b === 'hold' ? 'text-warning' : 'text-danger')}>{label}</label>
@@ -449,6 +713,7 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected
           disabled={disabled}
           onFocus={e => { onActivate(index); e.currentTarget.select(); }}
           onChange={e => onUpdate(d.lineId, x => setQty(x, b, e.target.value.replace(/[^\d.]/g, '')))}
+          onBlur={() => { if (needsDialogOnBlur && dec.gt0(d[b as 'hold' | 'reject']) && !d.reason.trim()) openReasonDialog(b as 'hold' | 'reject'); }}
           aria-invalid={sumOff || undefined}
           aria-describedby={visibleError ? `${id}-err` : undefined}
           aria-label={t('approve.qtyLabel', { what: label, n: d.lineNo })}
@@ -471,7 +736,7 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected
         <span className="hidden text-right text-sm text-fg-subtle tabular-nums md:block">{d.lineNo}</span>
         <div className="min-w-0">
           <p className="truncate font-medium"><span className="mr-1.5 text-sm font-normal text-fg-subtle md:hidden">{d.lineNo}</span>{lineItemLabel(line)}</p>
-          <p className="text-xs text-fg-subtle">{t('approve.requested', { qty: `${fmtQty(line.qty.requested)} ${uom}`.trim() })}</p>
+          <p className="text-xs text-fg-subtle">{t('approve.requested', { qty: `${fmtQty(line.qty.requested)} ${uom}`.trim() })}{prevHeld && <span className="ml-2 inline-flex items-center gap-0.5 rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold text-warning tabular-nums" data-testid={`decision-${d.lineNo}-prev-held`}><PauseCircle className="size-2.5" aria-hidden />{t('approve.held.prevStage', { qty: `${fmtQty(prevHeld)} ${uom}`.trim() })}</span>}</p>
           <div className="mt-1.5 max-w-56"><SplitBar d={d} /></div>
         </div>
         <div className="text-right">
@@ -485,8 +750,8 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected
         </div>
         <div className="col-span-3 flex gap-2 md:col-span-1 md:justify-end md:gap-1">
           <QuickButton tone="approve" label={t('approve.approve')} short="A" pressed={o === 'approve'} onClick={() => onUpdate(d.lineId, x => setWhole(x, 'approve'))} testId={`decision-${d.lineNo}-set-approve`} />
-          <QuickButton tone="hold" label={t('approve.hold')} short="H" pressed={o === 'hold'} disabled={!actions.includes('hold')} onClick={() => { onUpdate(d.lineId, x => setWhole(x, 'hold')); focusReason(d.lineNo); }} testId={`decision-${d.lineNo}-set-hold`} />
-          <QuickButton tone="reject" label={t('approve.reject')} short="R" pressed={o === 'reject'} disabled={!actions.includes('reject')} onClick={() => { onUpdate(d.lineId, x => setWhole(x, 'reject')); focusReason(d.lineNo); }} testId={`decision-${d.lineNo}-set-reject`} />
+          <QuickButton tone="hold" label={t('approve.hold')} short="H" pressed={o === 'hold'} disabled={!actions.includes('hold')} onClick={() => { onUpdate(d.lineId, x => setWhole(x, 'hold')); openReasonDialog('hold'); }} testId={`decision-${d.lineNo}-set-hold`} />
+          <QuickButton tone="reject" label={t('approve.reject')} short="R" pressed={o === 'reject'} disabled={!actions.includes('reject')} onClick={() => { onUpdate(d.lineId, x => setWhole(x, 'reject')); openReasonDialog('reject'); }} testId={`decision-${d.lineNo}-set-reject`} />
         </div>
       </div>
 
@@ -498,10 +763,15 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected
               <label htmlFor={`${id}-reason`} className="shrink-0 text-xs font-medium text-fg-muted">
                 {reduced ? t('approve.reasonReduce', { qty: `${fmtQty(d.reject)} ${uom}`.trim() }) : dec.gt0(d.hold) && !dec.gt0(d.reject) ? t('approve.reasonHold') : t('approve.reasonReject')}
               </label>
-              <Input id={`${id}-reason`} value={d.reason} maxLength={500} onFocus={() => onActivate(index)}
-                onChange={e => onUpdate(d.lineId, x => ({ ...x, reason: e.target.value }))}
-                aria-invalid={(visibleError === 'reason') || undefined} data-submit-on-enter="true"
-                className={cn('h-10 md:h-8', visibleError === 'reason' && 'border-danger')} data-testid={`decision-${d.lineNo}-reason`} />
+              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                <Input id={`${id}-reason`} value={d.reason} maxLength={500} onFocus={() => onActivate(index)}
+                  onChange={e => onUpdate(d.lineId, x => ({ ...x, reason: e.target.value }))}
+                  aria-invalid={(visibleError === 'reason') || undefined} data-submit-on-enter="true"
+                  className={cn('h-10 flex-1 md:h-8', visibleError === 'reason' && 'border-danger')} data-testid={`decision-${d.lineNo}-reason`} />
+                <button type="button" onClick={() => openReasonDialog(dec.gt0(d.hold) && !dec.gt0(d.reject) ? 'hold' : 'reject')}
+                  className="shrink-0 rounded border border-border px-2 py-1 text-xs text-fg-muted hover:bg-subtle hover:text-fg"
+                  aria-label="Edit reason" data-testid={`decision-${d.lineNo}-reason-edit`}>Edit</button>
+              </div>
             </div>
           )}
           {editable.map(f => (
@@ -514,33 +784,250 @@ const DecisionRow = memo(function DecisionRow({ d, line, index, active, selected
           {visibleError && <p id={`${id}-err`} role="alert" className="text-xs font-medium text-danger" data-testid={`decision-${d.lineNo}-error`}>{t(ERR_KEY[visibleError], { pending: fmtQty(d.pending) })}</p>}
         </div>
       )}
+
+
+
+      {/* Item context: last indents, POs, inventory */}
+      {typeof line.values.item === 'string' && line.values.item && <ItemContextPanel itemId={line.values.item} uom={lineUom(line)} />}
+
+      {/* Per-item history accordion */}
+      {lineHistory.length > 0 && (
+        <div className="mt-2 md:ml-[calc(4.25rem+1.5rem)]">
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); setHistOpen(v => !v); }}
+            aria-expanded={histOpen}
+            className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg transition-colors"
+            data-testid={`decision-${d.lineNo}-history-toggle`}
+          >
+            {histOpen ? <ChevronUp className="size-3.5" aria-hidden /> : <ChevronDown className="size-3.5" aria-hidden />}
+            History ({lineHistory.length})
+          </button>
+          {histOpen && (
+            <div className="mt-1.5 rounded border border-border bg-subtle overflow-hidden" data-testid={`decision-${d.lineNo}-history`}>
+              <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted border-b border-border bg-muted/40">
+                History — {lineItemLabel(line)}
+              </div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border bg-muted/60 text-left text-fg-muted">
+                    <th className="px-3 py-1.5 font-medium">#</th>
+                    <th className="px-3 py-1.5 font-medium">Date &amp; Time</th>
+                    <th className="px-3 py-1.5 font-medium">Action By</th>
+                    <th className="px-3 py-1.5 font-medium">Role</th>
+                    <th className="px-3 py-1.5 font-medium">Action</th>
+                    <th className="px-3 py-1.5 font-medium">Qty</th>
+                    <th className="px-3 py-1.5 font-medium">Remarks</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {lineHistory.map((entry, idx) => {
+                    const ld = entry.lineDecisions?.find(x => x.lineNo === d.lineNo);
+                    const actionQty = ld ? [ld.approve && `${fmtQty(ld.approve)} ✓`, ld.hold && `${fmtQty(ld.hold)} ⏸`, ld.reject && `${fmtQty(ld.reject)} ✕`].filter(Boolean).join(', ') : '—';
+                    const actionLabel = ld?.approve && !ld?.reject && !ld?.hold ? 'Approved' : ld?.hold && !ld?.approve && !ld?.reject ? 'On Hold' : ld?.reject && !ld?.approve && !ld?.hold ? 'Rejected' : entry.kind === 'workflow' ? 'Decision' : entry.kind;
+                    const actionCls = ld?.approve && !ld?.reject && !ld?.hold ? 'text-success' : ld?.hold && !ld?.reject ? 'text-warning' : ld?.reject ? 'text-danger' : 'text-fg-muted';
+                    return (
+                      <tr key={entry.id} className="hover:bg-muted/40">
+                        <td className="px-3 py-1.5 tabular-nums text-fg-muted">{idx + 1}</td>
+                        <td className="px-3 py-1.5 tabular-nums text-fg-muted whitespace-nowrap">{new Date(entry.at).toLocaleString()}</td>
+                        <td className="px-3 py-1.5 font-medium text-fg">{entry.actor?.name ?? '—'}</td>
+                        <td className="px-3 py-1.5 text-fg-muted">{(entry.actor as { role?: string } | undefined)?.role ?? '—'}</td>
+                        <td className={cn('px-3 py-1.5 font-medium', actionCls)}>{actionLabel}</td>
+                        <td className="px-3 py-1.5 tabular-nums text-fg">{actionQty}</td>
+                        <td className="px-3 py-1.5 text-fg-muted italic max-w-[200px] truncate">{ld?.reason ?? entry.detail ?? '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 });
 
+// ------------------------------------------------------------------------------------------------ item context panel (last indents, POs, inventory)
+
+type ContextSection = 'indent' | 'po' | 'inventory';
+
+export function ItemContextPanel({ itemId, uom, indent = true }: { itemId: string; uom: string; indent?: boolean }) {
+  const [open, setOpen] = useState<ContextSection | null>(null);
+
+  // Last 5 indents for this item
+  const indents = useQuery({
+    queryKey: ['item-ctx', 'indent', itemId],
+    queryFn: () => docsApi.list('indent', { view: 'document', item: itemId }, null, 5),
+    enabled: open === 'indent',
+    staleTime: 60_000,
+  });
+  // Last 5 POs for this item
+  const pos = useQuery({
+    queryKey: ['item-ctx', 'purchase_order', itemId],
+    queryFn: () => docsApi.list('purchase_order', { view: 'document', item: itemId }, null, 5),
+    enabled: open === 'po',
+    staleTime: 60_000,
+  });
+  // Inventory summary
+  const inv = useQuery({
+    queryKey: stockKeys.summary(itemId),
+    queryFn: () => stockApi.summary(itemId),
+    enabled: open === 'inventory',
+    staleTime: 60_000,
+  });
+
+  const toggle = (s: ContextSection) => setOpen(o => o === s ? null : s);
+
+  const SectionBtn = ({ id, icon, label }: { id: ContextSection; icon: React.ReactNode; label: string }) => (
+    <button type="button" onClick={e => { e.stopPropagation(); toggle(id); }}
+      className={cn('inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition-colors',
+        open === id ? 'border-accent bg-accent text-white' : 'border-border bg-surface text-fg-muted hover:bg-subtle hover:text-fg')}
+      aria-expanded={open === id}>
+      {icon}{label}{open === id ? <ChevronUp className="size-3" aria-hidden /> : <ChevronDown className="size-3" aria-hidden />}
+    </button>
+  );
+
+  const DocTable = ({ rows, loading }: { rows: DocListRow[] | undefined; loading: boolean }) => {
+    if (loading) return <p className="py-3 text-center text-xs text-fg-muted">{t('common.loading')}…</p>;
+    if (!rows?.length) return <p className="py-3 text-center text-xs text-fg-muted">{t('docs.list.emptyFiltered')}</p>;
+    return (
+      <table className="w-full text-xs">
+        <thead><tr className="border-b border-border bg-muted/60 text-left text-fg-muted">
+          <th className="px-3 py-1.5 font-medium">#</th>
+          <th className="px-3 py-1.5 font-medium">{t('docs.col.number')}</th>
+          <th className="px-3 py-1.5 font-medium">{t('docs.col.date')}</th>
+          <th className="px-3 py-1.5 font-medium">{t('docs.col.status')}</th>
+          <th className="px-3 py-1.5 font-medium">{t('docs.col.location')}</th>
+          <th className="px-3 py-1.5 font-medium text-right">{t('docs.col.total')}</th>
+        </tr></thead>
+        <tbody className="divide-y divide-border">
+          {rows.map((r, i) => (
+            <tr key={r.id} className="hover:bg-muted/40">
+              <td className="px-3 py-1.5 tabular-nums text-fg-muted">{i + 1}</td>
+              <td className="px-3 py-1.5 font-medium text-fg">{r.number ?? '—'}</td>
+              <td className="px-3 py-1.5 tabular-nums text-fg-muted whitespace-nowrap">{new Date(r.docDate).toLocaleDateString()}</td>
+              <td className="px-3 py-1.5"><span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', r.statusKey === 'approved' || r.statusKey === 'completed' ? 'bg-success/15 text-success' : r.statusKey === 'rejected' || r.statusKey === 'cancelled' ? 'bg-danger/15 text-danger' : r.statusKey === 'hold' ? 'bg-warning/15 text-warning' : 'bg-muted text-fg-muted')}>{r.statusLabel}</span></td>
+              <td className="px-3 py-1.5 text-fg-muted">{r.location.name}</td>
+              <td className="px-3 py-1.5 tabular-nums text-right text-fg">{r.totalAmount ? fmtQty(r.totalAmount) : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  };
+
+  return (
+    <div className="mt-2 md:ml-[calc(4.25rem+1.5rem)]">
+      <div className="flex flex-wrap gap-2">
+        <SectionBtn id="indent" icon={<Package className="size-3" aria-hidden />} label="Last 5 Indents" />
+        <SectionBtn id="po" icon={<ShoppingCart className="size-3" aria-hidden />} label="Last 5 POs" />
+        <SectionBtn id="inventory" icon={<Package className="size-3" aria-hidden />} label="Inventory" />
+      </div>
+
+      {open === 'indent' && (
+        <div className="mt-1.5 overflow-hidden rounded border border-border bg-subtle">
+          <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted">Last 5 Indents for this Item</div>
+          <DocTable rows={indents.data?.data as DocListRow[] | undefined} loading={indents.isLoading} />
+        </div>
+      )}
+
+      {open === 'po' && (
+        <div className="mt-1.5 overflow-hidden rounded border border-border bg-subtle">
+          <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted">Last 5 Purchase Orders for this Item</div>
+          <DocTable rows={pos.data?.data as DocListRow[] | undefined} loading={pos.isLoading} />
+        </div>
+      )}
+
+      {open === 'inventory' && (
+        <div className="mt-1.5 overflow-hidden rounded border border-border bg-subtle">
+          <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted">{t('stock.title')}</div>
+          {inv.isLoading ? (
+            <p className="py-3 text-center text-xs text-fg-muted">{t('common.loading')}…</p>
+          ) : !inv.data ? (
+            <p className="py-3 text-center text-xs text-fg-muted">{t('docs.list.emptyFiltered')}</p>
+          ) : (
+            <div>
+              {/* Totals summary row */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-b border-border px-3 py-2 text-xs sm:grid-cols-4">
+                <div><p className="text-fg-muted">Available</p><p className="font-semibold text-success tabular-nums">{fmtQty(inv.data.totals.available)} {uom}</p></div>
+                <div><p className="text-fg-muted">Quarantine</p><p className="font-semibold text-warning tabular-nums">{fmtQty(inv.data.totals.quarantine)} {uom}</p></div>
+                <div><p className="text-fg-muted">Open PO Qty</p><p className="font-semibold tabular-nums text-fg">{fmtQty(inv.data.totals.openPoQty)} {uom}</p></div>
+                <div><p className="text-fg-muted">Pending Issue</p><p className="font-semibold tabular-nums text-fg">{fmtQty(inv.data.totals.pendingIssueQty)} {uom}</p></div>
+              </div>
+              {/* Per-location breakdown */}
+              {inv.data.nodes.length > 0 && (
+                <table className="w-full text-xs">
+                  <thead><tr className="border-b border-border bg-muted/60 text-left text-fg-muted">
+                    <th className="px-3 py-1.5 font-medium">Location</th>
+                    <th className="px-3 py-1.5 font-medium text-right text-success">Available</th>
+                    <th className="px-3 py-1.5 font-medium text-right text-warning">Quarantine</th>
+                    <th className="px-3 py-1.5 font-medium text-right">Open PO</th>
+                    <th className="px-3 py-1.5 font-medium text-right">Pending Issue</th>
+                    <th className="px-3 py-1.5 font-medium text-right">Avg Cost</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-border">
+                    {inv.data.nodes.map(n => (
+                      <tr key={n.node.id} className="hover:bg-muted/40">
+                        <td className="px-3 py-1.5 font-medium text-fg">{n.node.name}</td>
+                        <td className="px-3 py-1.5 tabular-nums text-right text-success">{fmtQty(n.available)}</td>
+                        <td className="px-3 py-1.5 tabular-nums text-right text-warning">{fmtQty(n.quarantine)}</td>
+                        <td className="px-3 py-1.5 tabular-nums text-right text-fg">{fmtQty(n.openPoQty)}</td>
+                        <td className="px-3 py-1.5 tabular-nums text-right text-fg">{fmtQty(n.pendingIssueQty)}</td>
+                        <td className="px-3 py-1.5 tabular-nums text-right text-fg-muted">{n.avgCost ? fmtQty(n.avgCost) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------------------------------------ held lines
 
-function UnholdPanel({ lines, stageKey, busy, onUnhold }: { lines: DocumentLineRow[]; stageKey: string; busy: string | null; onUnhold: (ids: string[]) => void }) {
+function UnholdPanel({ lines, stageKey, stageName, lineHistoryMap, busy, canUnhold, onUnhold }: { lines: DocumentLineRow[]; stageKey: string; stageName: string; lineHistoryMap: Map<number, TimelineEntry[]>; busy: string | null; canUnhold: boolean; onUnhold: (ids: string[]) => void }) {
   return (
     <Card className="mt-4 overflow-hidden" data-testid="unhold-panel">
       <div className="flex items-center gap-2 border-b border-border bg-warning-soft/60 px-3 py-2.5">
         <PauseCircle className="size-4 text-warning" aria-hidden />
         <h2 className="flex-1 font-medium">{t('approve.held.title', { n: lines.length })}</h2>
-        {lines.length > 1 && <Button variant="secondary" size="sm" onClick={() => onUnhold(lines.map(l => l.id))} loading={busy?.startsWith('unhold:') && busy.includes(',')} data-testid="unhold-all"><Play aria-hidden />{t('approve.held.releaseAll')}</Button>}
+        {canUnhold && lines.length > 1 && <Button variant="secondary" size="sm" onClick={() => onUnhold(lines.map(l => l.id))} loading={busy?.startsWith('unhold:') && busy.includes(',')} data-testid="unhold-all"><Play aria-hidden />{t('approve.held.releaseAll')}</Button>}
       </div>
       <ul className="divide-y divide-border">
-        {lines.map(l => (
-          <li key={l.id} className="flex items-center gap-3 px-3 py-2.5" data-testid={`held-row-${l.lineNo}`}>
-            <span className="w-6 text-right text-sm text-fg-subtle tabular-nums">{l.lineNo}</span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">{lineItemLabel(l)}</p>
-              <p className="text-xs text-warning tabular-nums">{t('approve.held.qty', { qty: `${fmtQty(l.stages[stageKey]!.held)} ${lineUom(l)}`.trim() })}</p>
-            </div>
-            <Button variant="secondary" size="sm" className="h-10 md:h-8" onClick={() => onUnhold([l.id])} loading={busy === `unhold:${l.id}`} disabled={!!busy} data-testid={`unhold-${l.lineNo}`}>
-              <Play aria-hidden />{t('approve.held.release')}
-            </Button>
-          </li>
-        ))}
+        {lines.map(l => {
+          // Find the most recent hold reason for this line at the current stage from the timeline
+          const lineHistory = lineHistoryMap.get(l.lineNo) ?? [];
+          const holdEntry = [...lineHistory].reverse().find(e =>
+            e.lineDecisions?.some(ld => ld.lineNo === l.lineNo && ld.hold && ld.hold !== '0')
+          );
+          const holdDecision = holdEntry?.lineDecisions?.find(ld => ld.lineNo === l.lineNo && ld.hold && ld.hold !== '0');
+          const holdReason = holdDecision?.reason ?? holdEntry?.detail ?? null;
+          return (
+            <li key={l.id} className="flex items-center gap-3 px-3 py-2.5" data-testid={`held-row-${l.lineNo}`}>
+              <span className="w-6 shrink-0 text-right text-sm text-fg-subtle tabular-nums">{l.lineNo}</span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">{lineItemLabel(l)}</p>
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-fg-muted">
+                  <span className="inline-flex items-center gap-1 text-warning tabular-nums">
+                    <PauseCircle className="size-3" aria-hidden />{t('approve.held.qty', { qty: `${fmtQty(l.stages[stageKey]!.held)} ${lineUom(l)}`.trim() })}
+                  </span>
+                  <span className="rounded bg-muted px-1.5 py-0.5 font-medium text-fg-muted" data-testid={`held-row-${l.lineNo}-stage`}>{stageName}</span>
+                  {holdReason && <span className="italic text-fg-subtle truncate max-w-xs" data-testid={`held-row-${l.lineNo}-reason`}>{holdReason}</span>}
+                </div>
+              </div>
+              {canUnhold && (
+                <Button variant="secondary" size="sm" className="h-10 md:h-8 shrink-0" onClick={() => onUnhold([l.id])} loading={busy === `unhold:${l.id}`} disabled={!!busy} data-testid={`unhold-${l.lineNo}`}>
+                  <Play aria-hidden />{t('approve.held.release')}
+                </Button>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </Card>
   );
@@ -587,5 +1074,108 @@ function DocumentDecision({ doc, stage, actions, busy, onDecide }: {
         </Button>
       </div>
     </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// LineHistory: exported for use in inbox-items (shows approval history inline)
+// ---------------------------------------------------------------------------
+export function LineHistory({ docTypeKey, docId, line, lineNo, indent = true }: { docTypeKey: string; docId: string; line: DocumentLineRow; lineNo: number; indent?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const history = useQuery({
+    queryKey: ['line-history', docTypeKey, docId, lineNo],
+    queryFn: () => docsApi.timeline(docTypeKey, docId),
+    enabled: open,
+    staleTime: 60_000,
+  });
+
+  const rows = useMemo<HistoryRow[]>(() => {
+    if (!history.data) return [];
+    const result: HistoryRow[] = [];
+    const wfEntries = [...history.data].filter(e => e.kind === 'workflow' && e.lineDecisions?.some(ld => ld.lineNo === lineNo)).reverse();
+    for (const entry of wfEntries) {
+      for (const ld of entry.lineDecisions ?? []) {
+        if (ld.lineNo !== lineNo) continue;
+        const hasApprove = !!ld.approve && ld.approve !== '0';
+        const hasHold = !!ld.hold && ld.hold !== '0';
+        const hasReject = !!ld.reject && ld.reject !== '0';
+        let action: HistoryRow['action'];
+        if (hasApprove && !hasHold && !hasReject) action = 'approved';
+        else if (hasHold && !hasApprove && !hasReject) action = 'held';
+        else if (hasReject && !hasApprove && !hasHold) action = 'rejected';
+        else action = 'mixed';
+        const qtyParts: string[] = [];
+        if (hasApprove) qtyParts.push(fmtQty(ld.approve!));
+        if (hasHold) qtyParts.push(fmtQty(ld.hold!));
+        if (hasReject) qtyParts.push(fmtQty(ld.reject!));
+        result.push({
+          entryId: `${entry.id}:${ld.lineNo}`,
+          at: entry.at,
+          actorName: entry.actor?.name ?? '—',
+          stageTitle: entry.title,
+          lineNo: ld.lineNo,
+          itemLabel: lineItemLabel(line),
+          action,
+          qty: qtyParts.join(' / ') || '—',
+          reason: ld.reason ?? entry.detail ?? '',
+        });
+      }
+    }
+    return result;
+  }, [history.data, line, lineNo]);
+
+  const tone = (a: HistoryRow['action']) => {
+    if (a === 'approved') return 'success' as const;
+    if (a === 'held') return 'warning' as const;
+    if (a === 'rejected') return 'danger' as const;
+    return 'neutral' as const;
+  };
+  const label = (a: HistoryRow['action']) => {
+    if (a === 'approved') return t('approve.history.action.approved');
+    if (a === 'held') return t('approve.history.action.held');
+    if (a === 'rejected') return t('approve.history.action.rejected');
+    return t('approve.history.action.mixed');
+  };
+
+  return (
+    <div className={cn('mt-2', indent && 'md:ml-[calc(4.25rem+1.5rem)]')}>
+      <button type="button" onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
+        className={cn('inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition-colors',
+          open ? 'border-accent bg-accent text-white' : 'border-border bg-surface text-fg-muted hover:bg-subtle hover:text-fg')}
+        aria-expanded={open}>
+        <Clock className="size-3" aria-hidden />{t('approve.history.title')}{open ? <ChevronUp className="size-3" aria-hidden /> : <ChevronDown className="size-3" aria-hidden />}
+      </button>
+      {open && (
+        <div className="mt-1.5 overflow-hidden rounded border border-border bg-subtle">
+          <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg-muted">{t('approve.history.title')}</div>
+          {history.isLoading ? (
+            <p className="py-3 text-center text-xs text-fg-muted">{t('common.loading')}</p>
+          ) : rows.length === 0 ? (
+            <p className="py-3 text-center text-xs text-fg-muted">{t('approve.history.empty')}</p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead><tr className="border-b border-border bg-muted/60 text-left text-fg-muted">
+                <th className="px-3 py-1.5 font-medium">{t('approve.history.col.date')}</th>
+                <th className="px-3 py-1.5 font-medium">{t('approve.history.col.stage')}</th>
+                <th className="px-3 py-1.5 font-medium">{t('approve.history.col.by')}</th>
+                <th className="px-3 py-1.5 font-medium">{t('approve.history.col.action')}</th>
+                <th className="px-3 py-1.5 font-medium text-right">{t('approve.history.col.qty')}</th>
+              </tr></thead>
+              <tbody className="divide-y divide-border">
+                {rows.map(r => (
+                  <tr key={r.entryId}>
+                    <td className="px-3 py-1.5 tabular-nums text-fg-muted whitespace-nowrap">{new Date(r.at).toLocaleDateString()}</td>
+                    <td className="px-3 py-1.5 text-fg-muted">{r.stageTitle}</td>
+                    <td className="px-3 py-1.5">{r.actorName}</td>
+                    <td className="px-3 py-1.5"><Badge tone={tone(r.action)}>{label(r.action)}</Badge></td>
+                    <td className="px-3 py-1.5 tabular-nums text-right font-medium">{r.qty}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

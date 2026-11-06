@@ -180,12 +180,13 @@ export function ReceivePage() {
           ) : rows.length === 0 ? (
             <EmptyState icon={<PackageCheck />} title={t('grn.empty')} description={t('grn.emptyHint')} />
           ) : (
-            <div className="space-y-3" data-testid="grn-picker">
+            <div className="space-y-4" data-testid="grn-picker">
               {pos.map(g => {
                 const allOn = g.lines.every(l => picks[l.poLineId]);
                 const someOn = g.lines.some(l => picks[l.poLineId]);
                 return (
                   <section key={g.poId} className="overflow-hidden rounded-lg border border-border" aria-label={g.poNumber ?? ''} data-testid={`grn-po-${g.poNumber}`}>
+                    {/* PO header row */}
                     <div className="flex items-center gap-3 border-b border-border bg-subtle px-3 py-2">
                       <Checkbox checked={allOn ? true : someOn ? 'indeterminate' : false} onCheckedChange={c => g.lines.forEach(l => toggle(l, c === true))} aria-label={t('grn.pickPo', { po: g.poNumber ?? '' })} data-testid={`grn-po-all-${g.poNumber}`} />
                       <div className="min-w-0 flex-1">
@@ -194,9 +195,44 @@ export function ReceivePage() {
                       </div>
                       <span className="text-xs text-fg-subtle">{t('grn.nLines', { n: g.lines.length })}</span>
                     </div>
-                    <ul className="divide-y divide-border">
-                      {g.lines.map(l => <LineRow key={l.poLineId} line={l} pick={picks[l.poLineId]} serverError={lineErr?.ref === l.poLineId ? lineErr.message : null} showErrors={showErrors} currency={currency} onToggle={on => toggle(l, on)} onChange={patch => set(l.poLineId, patch)} />)}
-                    </ul>
+
+                    {/* Lines table */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-subtle/60 text-left text-xs text-fg-muted">
+                          <tr>
+                            <th className="px-3 py-2 font-medium w-8"></th>
+                            <th className="px-3 py-2 font-medium min-w-[10rem]">{t('proc.filter.item')}</th>
+                            <th className="px-3 py-2 font-medium">{t('proc.filter.location')}</th>
+                            <th className="px-3 py-2 font-medium text-right">Rate</th>
+                            <th className="px-3 py-2 font-medium text-right">{t('grn.ordered')}</th>
+                            <th className="px-3 py-2 font-medium text-right">{t('grn.received')}</th>
+                            <th className="px-3 py-2 font-medium text-right">{t('grn.pending')}</th>
+                            <th className="px-3 py-2 font-medium min-w-[7rem]">{t('grn.qtyReceived')}</th>
+                            <th className="px-3 py-2 font-medium min-w-[6rem]">{t('grn.rejectedQty')}</th>
+                            <th className="px-3 py-2 font-medium min-w-[6rem]">{t('grn.acceptedQty')}</th>
+                            <th className="px-3 py-2 font-medium min-w-[8rem]">{t('grn.rejectReason')}</th>
+                            <th className="px-3 py-2 font-medium min-w-[7rem]">{t('stock.col.batch')}</th>
+                            <th className="px-3 py-2 font-medium min-w-[8rem]">{t('grn.mfgDate')}</th>
+                            <th className="px-3 py-2 font-medium min-w-[8rem]">{t('grn.expiryDate')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {g.lines.map(l => (
+                            <LineRow
+                              key={l.poLineId}
+                              line={l}
+                              pick={picks[l.poLineId]}
+                              serverError={lineErr?.ref === l.poLineId ? lineErr.message : null}
+                              showErrors={showErrors}
+                              currency={currency}
+                              onToggle={on => toggle(l, on)}
+                              onChange={patch => set(l.poLineId, patch)}
+                            />
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </section>
                 );
               })}
@@ -241,56 +277,147 @@ function LineRow({ line: l, pick, serverError, showErrors, currency, onToggle, o
   const k = `${l.poNumber ?? 'po'}-${l.lineNo}`;
   const check = pick ? checkReceipt({ ...pick, line: l }) : null;
   const accepted = pick && isDecimal(pick.qty) ? dec.max0(dec.sub(pick.qty, pick.rejected.trim() && isDecimal(pick.rejected) ? pick.rejected : '0')) : null;
+  const hasError = showErrors && !!check?.error;
+
   return (
-    <li className={cn('px-3 py-2.5', pick && 'bg-accent-soft/40')} data-testid={`grn-line-${k}`} data-pending={l.pendingReceipt} data-max={l.maxReceivable}>
-      <div className="flex items-start gap-3">
-        <Checkbox className="mt-1" checked={!!pick} onCheckedChange={c => onToggle(c === true)} aria-label={t('grn.pickLine', { item: l.item?.name ?? '', n: l.lineNo })} data-testid={`grn-pick-${k}`} />
-        <div className="grid min-w-0 flex-1 gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,1fr)_auto]">
-          <div className="min-w-0">
-            <p className="truncate font-medium">{l.item?.name ?? '—'} <span className="font-normal text-fg-subtle">{l.item?.code}</span></p>
-            <p className="truncate text-sm text-fg-muted">{t('stock.lineN', { n: l.lineNo })} · {l.location.name}{l.expectedDate ? ` · ${t('grn.expected', { date: fmtDate(l.expectedDate) })}` : ''}{l.rate ? ` · ${fmtMoney(Number(l.rate), currency)}/${l.uom ?? t('proc.unit')}` : ''}</p>
-          </div>
-          <dl className="flex gap-3 text-right text-xs text-fg-muted sm:self-start">
-            <div><dt>{t('grn.ordered')}</dt><dd className="tabular-nums text-fg">{fmtQty(l.ordered)}</dd></div>
-            <div><dt>{t('grn.received')}</dt><dd className="tabular-nums text-fg">{fmtQty(l.received)}</dd></div>
-            <div><dt>{t('grn.pending')}</dt><dd className="font-semibold tabular-nums text-fg" data-testid={`grn-pending-${k}`}>{fmtQty(l.pendingReceipt)} {l.uom}</dd></div>
-          </dl>
-        </div>
-      </div>
-      {pick && (
-        <div className="mt-2 space-y-2 pl-7">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <FormField label={t('grn.qtyReceived')} hint={t('grn.maxHint', { max: fmtQty(l.maxReceivable) })}>
-              <Input inputMode="decimal" className="h-8" value={pick.qty} onChange={e => onChange({ qty: e.target.value })} aria-invalid={(showErrors && !!check?.error) || undefined} data-testid={`grn-qty-${k}`} />
-            </FormField>
-            <FormField label={t('grn.rejectedQty')}>
-              <Input inputMode="decimal" className="h-8" value={pick.rejected} placeholder="0" onChange={e => onChange({ rejected: e.target.value })} data-testid={`grn-rejected-${k}`} />
-            </FormField>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium">{t('grn.acceptedQty')}</span>
-              <span className="flex h-8 items-center tabular-nums" data-testid={`grn-accepted-${k}`}>{accepted === null ? '—' : fmtQty(accepted)}</span>
-            </div>
-            {pick.rejected.trim() && dec.gt0(pick.rejected) ? (
-              <FormField label={t('grn.rejectReason')} required>
-                <Input className="h-8" value={pick.rejectReason} maxLength={500} onChange={e => onChange({ rejectReason: e.target.value })} data-testid={`grn-reason-${k}`} />
-              </FormField>
-            ) : <span />}
-            <FormField label={t('stock.col.batch')}>
-              <Input className="h-8" value={pick.batchNo} maxLength={60} onChange={e => onChange({ batchNo: e.target.value })} data-testid={`grn-batch-${k}`} />
-            </FormField>
-            <FormField label={t('grn.mfgDate')}>
-              <Input type="date" className="h-8" value={pick.mfgDate} onChange={e => onChange({ mfgDate: e.target.value })} />
-            </FormField>
-            <FormField label={t('grn.expiryDate')}>
-              <Input type="date" className="h-8" value={pick.expiryDate} onChange={e => onChange({ expiryDate: e.target.value })} data-testid={`grn-expiry-${k}`} />
-            </FormField>
-          </div>
-          {check?.warning && !check.error && <p className="flex items-center gap-1.5 text-sm text-warning" data-testid={`grn-warn-${k}`}><AlertTriangle className="size-4" aria-hidden />{check.warning}</p>}
-          {check?.error && (showErrors || dec.cmp(pick.qty || '0', l.maxReceivable) > 0) && <p className="text-sm text-danger" role="alert" data-testid={`grn-line-error-${k}`}>{check.error}</p>}
-          {serverError && <p className="text-sm text-danger" role="alert" data-testid={`grn-server-error-${k}`}>{serverError}</p>}
-          {dec.cmp(l.maxReceivable, l.pendingReceipt) > 0 && !check?.warning && <Badge tone="neutral">{t('grn.tolerance', { max: fmtQty(l.maxReceivable) })}</Badge>}
-        </div>
-      )}
-    </li>
+    <tr
+      className={cn('border-t border-border align-top', pick && 'bg-accent-soft/40')}
+      data-testid={`grn-line-${k}`}
+      data-pending={l.pendingReceipt}
+      data-max={l.maxReceivable}
+    >
+      {/* Checkbox */}
+      <td className="px-3 py-2.5">
+        <Checkbox checked={!!pick} onCheckedChange={c => onToggle(c === true)} aria-label={t('grn.pickLine', { item: l.item?.name ?? '', n: l.lineNo })} data-testid={`grn-pick-${k}`} />
+      </td>
+
+      {/* Item */}
+      <td className="px-3 py-2.5">
+        <p className="font-medium">{l.item?.name ?? '—'}</p>
+        <p className="text-xs text-fg-subtle">{l.item?.code} · {t('stock.lineN', { n: l.lineNo })}</p>
+        {l.expectedDate && <p className="text-xs text-fg-muted">{t('grn.expected', { date: fmtDate(l.expectedDate) })}</p>}
+        {/* Errors / warnings below item name */}
+        {pick && check?.warning && !check.error && (
+          <p className="mt-1 flex items-center gap-1 text-xs text-warning" data-testid={`grn-warn-${k}`}><AlertTriangle className="size-3" aria-hidden />{check.warning}</p>
+        )}
+        {pick && hasError && (
+          <p className="mt-1 text-xs text-danger" role="alert" data-testid={`grn-line-error-${k}`}>{check?.error}</p>
+        )}
+        {serverError && <p className="mt-1 text-xs text-danger" role="alert" data-testid={`grn-server-error-${k}`}>{serverError}</p>}
+        {pick && dec.cmp(l.maxReceivable, l.pendingReceipt) > 0 && !check?.warning && (
+          <Badge tone="neutral" className="mt-1">{t('grn.tolerance', { max: fmtQty(l.maxReceivable) })}</Badge>
+        )}
+      </td>
+
+      {/* Location */}
+      <td className="px-3 py-2.5 text-fg-muted">{l.location.name}</td>
+
+      {/* Rate */}
+      <td className="px-3 py-2.5 text-right tabular-nums text-fg-muted">
+        {l.rate ? fmtMoney(Number(l.rate), currency) : '—'}
+      </td>
+
+      {/* Ordered */}
+      <td className="px-3 py-2.5 text-right tabular-nums">{fmtQty(l.ordered)}</td>
+
+      {/* Received */}
+      <td className="px-3 py-2.5 text-right tabular-nums text-fg-muted">{fmtQty(l.received)}</td>
+
+      {/* Pending */}
+      <td className="px-3 py-2.5 text-right font-semibold tabular-nums" data-testid={`grn-pending-${k}`}>
+        {fmtQty(l.pendingReceipt)} <span className="font-normal text-fg-muted">{l.uom}</span>
+      </td>
+
+      {/* Qty received (editable) */}
+      <td className="px-3 py-2.5">
+        {pick ? (
+          <Input
+            inputMode="decimal"
+            className="h-8 w-24"
+            value={pick.qty}
+            onChange={e => onChange({ qty: e.target.value })}
+            aria-invalid={hasError || undefined}
+            aria-label={t('grn.qtyReceived')}
+            data-testid={`grn-qty-${k}`}
+            title={t('grn.maxHint', { max: fmtQty(l.maxReceivable) })}
+          />
+        ) : <span className="text-fg-subtle">—</span>}
+      </td>
+
+      {/* Rejected qty (editable) */}
+      <td className="px-3 py-2.5">
+        {pick ? (
+          <Input
+            inputMode="decimal"
+            className="h-8 w-20"
+            value={pick.rejected}
+            placeholder="0"
+            onChange={e => onChange({ rejected: e.target.value })}
+            aria-label={t('grn.rejectedQty')}
+            data-testid={`grn-rejected-${k}`}
+          />
+        ) : <span className="text-fg-subtle">—</span>}
+      </td>
+
+      {/* Accepted qty (computed) */}
+      <td className="px-3 py-2.5 tabular-nums" data-testid={`grn-accepted-${k}`}>
+        {accepted !== null ? fmtQty(accepted) : <span className="text-fg-subtle">—</span>}
+      </td>
+
+      {/* Reject reason (editable, only needed when rejected > 0) */}
+      <td className="px-3 py-2.5">
+        {pick && pick.rejected.trim() && dec.gt0(pick.rejected) ? (
+          <Input
+            className="h-8 w-32"
+            value={pick.rejectReason}
+            maxLength={500}
+            onChange={e => onChange({ rejectReason: e.target.value })}
+            aria-label={t('grn.rejectReason')}
+            data-testid={`grn-reason-${k}`}
+          />
+        ) : <span className="text-fg-subtle">—</span>}
+      </td>
+
+      {/* Batch no (editable) */}
+      <td className="px-3 py-2.5">
+        {pick ? (
+          <Input
+            className="h-8 w-28"
+            value={pick.batchNo}
+            maxLength={60}
+            onChange={e => onChange({ batchNo: e.target.value })}
+            aria-label={t('stock.col.batch')}
+            data-testid={`grn-batch-${k}`}
+          />
+        ) : <span className="text-fg-subtle">—</span>}
+      </td>
+
+      {/* Mfg date */}
+      <td className="px-3 py-2.5">
+        {pick ? (
+          <Input
+            type="date"
+            className="h-8 w-36"
+            value={pick.mfgDate}
+            onChange={e => onChange({ mfgDate: e.target.value })}
+            aria-label={t('grn.mfgDate')}
+          />
+        ) : <span className="text-fg-subtle">—</span>}
+      </td>
+
+      {/* Expiry date */}
+      <td className="px-3 py-2.5">
+        {pick ? (
+          <Input
+            type="date"
+            className="h-8 w-36"
+            value={pick.expiryDate}
+            onChange={e => onChange({ expiryDate: e.target.value })}
+            aria-label={t('grn.expiryDate')}
+            data-testid={`grn-expiry-${k}`}
+          />
+        ) : <span className="text-fg-subtle">—</span>}
+      </td>
+    </tr>
   );
 }

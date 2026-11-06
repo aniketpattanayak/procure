@@ -176,6 +176,47 @@ registerDocExtension('issue_request', {
 function IssueListAction() {
   return <LinkAction href="/stock/issue" perm={STOCK_PERM.issueAdd} icon={<PackageMinus aria-hidden />} label={t('issue.title')} testId="issue-against-requests-link" />;
 }
+
+/* ------------------------------------------------------------------ store_issue per-line stock bar */
+
+/**
+ * Minimal stock bar for the Store Issue form — shows available qty for the selected item.
+ * Appears below each line row on both the new/edit form (via FormRenderer lineExtra) and the
+ * saved detail view (via lineColumns). Only shown when the user has stock view permission.
+ */
+export function IssueLineStockBar({ itemId }: { itemId: string | undefined }) {
+  const perm = usePermissions();
+  const canViewStock = perm.has(STOCK_PERM.view);
+
+  const stock = useQuery({
+    queryKey: ['stock-summary', itemId],
+    queryFn: () => stockApi.summary(itemId!),
+    enabled: !!itemId && canViewStock,
+    staleTime: 30_000,
+  });
+
+  if (!itemId || !canViewStock) return null;
+
+  const totals = stock.data?.totals;
+
+  return (
+    <div className="mt-1 flex items-center gap-2 rounded border border-border bg-subtle px-2.5 py-1 text-xs" data-testid={`issue-stock-bar-${itemId ?? "none"}`}>
+      <span className="text-fg-muted">Available stock</span>
+      {stock.isLoading
+        ? <Skeleton className="h-3 w-12 inline-block" />
+        : <strong className={totals && parseFloat(totals.available) > 0 ? 'text-success' : 'text-warning'}>
+            {totals ? fmtQty(totals.available) : '—'}
+          </strong>
+      }
+      {totals && parseFloat(totals.pendingIssueQty) > 0 && (
+        <span className="text-fg-muted border-l border-border pl-2">
+          Pending issue <strong className="text-fg">{fmtQty(totals.pendingIssueQty)}</strong>
+        </span>
+      )}
+    </div>
+  );
+}
+
 registerDocListAction('store_issue', { key: 'issue-from-requests', Component: IssueListAction });
 
 registerDocExtension('store_issue', {
@@ -183,7 +224,12 @@ registerDocExtension('store_issue', {
     <LinkAction href={`/stock/return?issue=${ctx.doc.id}`} perm={STOCK_PERM.returnAdd} icon={<PackagePlus aria-hidden />} label={t('return.action')} testId="issue-return"
       show={!!ctx.doc.number && ctx.doc.lines.some(l => dec.gt0(dec.sub(l.qty.approved, l.qty.returned)))} />
   ),
-  lineColumns: ctx => (ctx.doc.number ? [{ key: 'returned', label: t('return.returned'), align: 'right', cell: l => <QtyCell value={l.qty.returned} testId={`qty-returned-${l.lineNo}`} /> }] : []),
+  lineColumns: ctx => [
+    // Available stock bar — shown below each line on the saved detail view.
+    // On the new/edit form this is rendered via FormRenderer's lineExtra prop (see doc-form-page.tsx).
+    { key: 'stock_info', label: '', cell: l => <IssueLineStockBar itemId={typeof l.values.item === 'string' ? l.values.item : undefined} /> },
+    ...(ctx.doc.number ? [{ key: 'returned', label: t('return.returned'), align: 'right' as const, cell: (l: DocumentLineRow) => <QtyCell value={l.qty.returned} testId={`qty-returned-${l.lineNo}`} /> }] : []),
+  ],
 });
 
 registerDocListAction('store_return', {

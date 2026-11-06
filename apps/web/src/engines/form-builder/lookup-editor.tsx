@@ -4,7 +4,7 @@ import { Button, NativeSelect } from '@procure/ui';
 import { ArrowRight, Plus, Trash2 } from 'lucide-react';
 import { t } from '@/i18n';
 import { isDataField } from '@/engines/form-renderer/formula';
-import { PropRow, SelectProp } from './prop-controls';
+import { BoolProp, PropRow, SelectProp } from './prop-controls';
 
 type LookupF = Extract<GridColumn, { type: 'lookup' | 'multilookup' }>;
 interface Opt { key: string; label: string; type?: string }
@@ -105,6 +105,16 @@ export function LookupEditor({ field, onChange, masters, target, cascadeFields, 
             {!cascadeFields.length && <p className="text-xs text-fg-subtle">{t('fb.lookup.noParents')}</p>}
           </div>
         </PropRow>
+      )}
+
+      {field.type === 'lookup' && (
+        <BoolProp
+          name="allowCustom"
+          label={t('fb.lookup.allowCustom')}
+          value={(field as { allowCustom?: boolean }).allowCustom}
+          onChange={v => onChange({ allowCustom: v || undefined })}
+          hint={t('fb.lookup.allowCustomHint')}
+        />
       )}
 
       <PropRow label={t('fb.lookup.autofill')} hint={t('fb.lookup.autofillHint')}>

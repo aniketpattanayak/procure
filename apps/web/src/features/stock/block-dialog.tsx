@@ -29,7 +29,7 @@ export function BlockDialog({ row, onClose, onDone }: { row: StockBalanceRow; on
     if (qtyErr || reasonErr) return;
     setSaving(true);
     try {
-      await stockApi.block({ itemId: row.item.id, nodeId: row.node.id, batchId: row.batch?.id, qty: dec.norm(qty), reason: reason.trim(), direction });
+      await stockApi.block({ itemId: row.item.id, nodeId: row.node?.id ?? '', batchId: row.batch?.id, qty: dec.norm(qty), reason: reason.trim(), direction });
       void qc.invalidateQueries({ queryKey: stockKeys.all });
       toast.success(direction === 'block' ? t('stock.block.done') : t('stock.unblock.done'));
       onDone();
@@ -44,7 +44,7 @@ export function BlockDialog({ row, onClose, onDone }: { row: StockBalanceRow; on
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent
         title={t('stock.block.title')}
-        description={`${row.item.name} · ${row.node.name}${row.batch ? ` · ${row.batch.batchNo}` : ''}`}
+        description={`${row.item.name} · ${row.node?.name}${row.batch ? ` · ${row.batch.batchNo}` : ''}`}
         closeLabel={t('common.close')}
         data-testid="stock-block-dialog"
         footer={

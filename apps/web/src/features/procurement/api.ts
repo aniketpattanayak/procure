@@ -7,9 +7,9 @@
  * Generic `/docs/*` calls (lists, detail, workflow) always go to the real API.
  */
 import type {
-  ComparisonSheet, DocumentRow, FollowupRow, OrderableLine, Page, RevisionRow, TaxLine, VendorQuoteRow,
+  ApprovedIndentLine, ComparisonSheet, DocumentRow, FollowupRow, OrderableLine, Page, RevisionRow, TaxLine, VendorQuoteRow,
 } from '@procure/schema';
-import { AmendInput, FollowupInput, PoFromLines, SelectionCreate, VendorQuoteInput } from '@procure/schema';
+import { AmendInput, FollowupInput, PoFromIndent, PoFromLines, SelectionCreate, VendorQuoteInput } from '@procure/schema';
 import type { z } from 'zod';
 import { http } from '@/lib/api';
 import { docKeys } from '@/features/documents/api';
@@ -19,6 +19,8 @@ export type SelectionBody = z.input<typeof SelectionCreate>;
 export type PoFromLinesBody = z.input<typeof PoFromLines>;
 export type FollowupBody = z.input<typeof FollowupInput>;
 export type AmendBody = z.input<typeof AmendInput>;
+export type PoFromIndentBody = z.input<typeof PoFromIndent>;
+export interface ApprovedIndentQuery { item?: string; location?: string; q?: string; cursor?: string | null; limit?: number }
 
 /** GET /docs/po/:id/taxes. `totals` keys: taxable, cgst, sgst, igst, cess, tax, grand (any may be missing). */
 export interface PoTaxes {
@@ -85,7 +87,15 @@ export const procApi = {
     (body: PoFromLinesBody) => http.post<DocumentRow[]>('/procurement/po/from-lines', body),
     (m, body) => m.poFromLines(body),
   ),
-  taxes: pick(
+  approvedIndentLines: pick(
+    (q: ApprovedIndentQuery) => http.get<Page<ApprovedIndentLine>>('/procurement/approved-indent-lines', { item: q.item, location: q.location, q: q.q?.trim() || undefined, cursor: q.cursor ?? undefined, limit: q.limit ?? 100 }),
+    (m, q) => m.approvedIndentLines(q),
+  ),
+  poFromIndent: pick(
+    (body: PoFromIndentBody) => http.post<DocumentRow[]>('/procurement/po/from-lines', body),
+    (m, body) => m.poFromIndent(body),
+  ),
+    taxes: pick(
     (poId: string) => http.get<PoTaxes>(`/docs/po/${enc(poId)}/taxes`),
     (m, poId) => m.taxes(poId),
   ),
@@ -125,4 +135,5 @@ export const procKeys = {
   taxes: (poId: string) => [...docKeys.detail('po', poId), 'taxes'] as const,
   followups: (poId: string) => [...docKeys.detail('po', poId), 'followups'] as const,
   revisions: (poId: string) => [...docKeys.detail('po', poId), 'revisions'] as const,
+  approvedIndents: (q: ApprovedIndentQuery) => ['procurement', 'approvedIndents', q.item ?? '', q.location ?? '', q.q ?? ''] as const,
 };

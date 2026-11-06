@@ -101,7 +101,7 @@ function sheetFor(lineIds: string[], qtyStr?: string): ComparisonSheet {
 
 function toOrderable(l: MockLine): OrderableLine {
   return {
-    sourceLineId: l.lineId, sourceKind: 'indent', indentLineId: l.lineId, indentNumber: l.indentNumber, lineNo: l.lineNo, item: { id: l.item.id, code: l.item.code, name: l.item.name },
+    sourceLineId: l.lineId, sourceKind: 'indent', indentLineId: l.lineId, indentNumber: l.indentNumber, selectionNumber: null, lineNo: l.lineNo, item: { id: l.item.id, code: l.item.code, name: l.item.name },
     uom: l.item.uom, vendor: null, rate: null, location: l.location, requiredDate: l.requiredDate, pendingOrder: l.selectable,
   };
 }
@@ -188,7 +188,15 @@ export const mockApi = {
       values: { party: vid }, refs: { party: { [vid]: Object.values(V).find(v => v.id === vid)?.name ?? 'Vendor' } },
     })), 400);
   },
-  taxes: (poId: string): Promise<PoTaxes> => {
+  approvedIndentLines: (_q: import('./api').ApprovedIndentQuery): Promise<import('@procure/schema').Page<import('@procure/schema').ApprovedIndentLine>> =>
+    wait({ data: [], nextCursor: null }),
+  poFromIndent: (body: import('./api').PoFromIndentBody) => {
+    const vendors = new Set(body.picks.map(p => p.vendorId));
+    return wait([...vendors].map(vid => fakeDoc('po', null as unknown as string, {
+      values: { party: vid }, refs: { party: { [vid]: 'Vendor' } },
+    })), 400);
+  },
+    taxes: (poId: string): Promise<PoTaxes> => {
     void poId;
     const mk = (taxable: number, rate: number, intra: boolean): TaxLine[] => intra
       ? [{ component: 'cgst', ratePct: String(rate / 2), taxableAmount: taxable.toFixed(2), taxAmount: (taxable * rate / 200).toFixed(2) },

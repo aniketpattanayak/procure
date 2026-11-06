@@ -8,8 +8,14 @@ import { refLabel } from './form-model';
 import type { DocLineColumn } from './extensions';
 import { DocStatusBadge, PendingPill, QtyCell } from './status';
 
+/** "ITM-00001 - Cement OPC 53 Grade" -> "Cement OPC 53 Grade": tables show the item name only (pickers keep the code). */
+export function itemNameOnly(label: string): string {
+  const m = /^[A-Za-z0-9][\w./-]*\s+[-–—]\s+(.+)$/.exec(label);
+  return m ? m[1]! : label;
+}
 export function lineItemLabel(l: DocumentLineRow): string {
-  return refLabel(l.refs, 'item', l.values.item) ?? (typeof l.values.description === 'string' ? l.values.description : null) ?? t('docs.lineN', { n: l.lineNo });
+  const ref = refLabel(l.refs, 'item', l.values.item);
+  return (ref ? itemNameOnly(ref) : null) ?? (typeof l.values.description === 'string' ? l.values.description : null) ?? t('docs.lineN', { n: l.lineNo });
 }
 export function lineUom(l: DocumentLineRow): string {
   return refLabel(l.refs, 'uom', l.values.uom) ?? '';
