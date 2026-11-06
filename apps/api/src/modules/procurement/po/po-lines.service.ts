@@ -81,13 +81,14 @@ export class PoLinesService {
     return r.rows;
   }
 
-  private toLine(r: Row): OrderableLine {
+  private toLine(r: Row, quotes: OrderableLine['quotes'] = []): OrderableLine {
     return {
       sourceLineId: r.id, lineNo: r.line_no, sourceKind: r.type_key === SELECTION ? 'selection' : 'indent', indentLineId: r.indent_line_id ?? r.id, indentNumber: r.indent_number, selectionNumber: r.type_key === SELECTION ? (r.number ?? null) : null,
       item: r.item_id ? { id: r.item_id, code: r.item_code ?? '', name: r.item_name ?? '' } : null, uom: r.uom_code,
       vendor: r.vendor_id ? { id: r.vendor_id, code: r.vendor_code ?? '', name: r.vendor_name ?? '' } : null,
       rate: r.rate === null ? null : fromUnits(toUnits(r.rate)), location: { id: r.loc_id, name: r.loc_name },
       requiredDate: dateStr(r.indent_required ?? r.required_date), pendingOrder: fromUnits(orderableUnits(r as never)),
+      quotes,
     };
   }
 
@@ -95,7 +96,38 @@ export class PoLinesService {
     if (actor.perms && !actor.perms.keys.includes(docAction(PO, 'add'))) throw AppError.forbidden();
     const selectionOn = await getTenantSetting(tx, 'flow.vendor_selection.enabled');
     const rows = await this.query(tx, actor, f, selectionOn, true);
-    return toPage(rows, f.limit, r => ({ t: r.created_at, id: r.id }), r => this.toLine(r));
+    // Fetch vendor quotes for indent lines (when vendor selection is off)
+    const pageRows = rows.slice(0, f.limit ?? 100);
+    const indentLineIds = pageRows.map(r => r.indent_line_id ?? r.id).filter(Boolean) as string[];
+    let quoteMap = new Map<string, OrderableLine['quotes']>();
+    if (!selectionOn && indentLineIds.length > 0) {
+      const now = new Date().toISOString().slice(0, 10);
+      const qr = await sql<{ indent_line_id: string; quote_id: string; vendor_id: string; vendor_code: string | null; vendor_name: string | null; quoted_rate: string; lead_time_days: number | null; valid_until: string | null }>`
+        select q.indent_line_id, q.id as quote_id, q.vendor_id,
+          v.code as vendor_code, v.name as vendor_name,
+          q.quoted_rate::text as quoted_rate,
+          q.lead_time_days, q.valid_until::text as valid_until
+        from app.vendor_quote q
+        join app.master_record v on v.id = q.vendor_id and v.tenant_id = q.tenant_id
+        where q.tenant_id = ${actor.tenantId}
+          and q.indent_line_id = any(${sql.val(indentLineIds)}::uuid[])
+          and q.is_current = true
+        order by q.created_at desc
+      `.execute(tx);
+      for (const q of qr.rows) {
+        const arr = quoteMap.get(q.indent_line_id) ?? [];
+        arr.push({
+          quoteId: q.quote_id,
+          vendor: { id: q.vendor_id, code: q.vendor_code ?? '', name: q.vendor_name ?? '' },
+          quotedRate: fromUnits(toUnits(q.quoted_rate)),
+          leadTimeDays: q.lead_time_days,
+          validUntil: q.valid_until ? dateStr(q.valid_until) : null,
+          expired: !!q.valid_until && q.valid_until < now,
+        });
+        quoteMap.set(q.indent_line_id, arr);
+      }
+    }
+    return toPage(rows, f.limit, r => ({ t: r.created_at, id: r.id }), r => this.toLine(r, quoteMap.get(r.indent_line_id ?? r.id) ?? []));
   }
 
   /** Current quote rate of (indent line, vendor), when vendor selection is off and the buyer gave no rate. */

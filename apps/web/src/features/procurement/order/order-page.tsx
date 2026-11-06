@@ -122,8 +122,14 @@ export function OrderPage() {
   // ---- Tab 1 handlers ----
   const toggle = (l: OrderableLine, on: boolean) => setPicks(p => {
     const n = { ...p };
-    if (on) n[l.sourceLineId] = { qty: l.pendingOrder, vendor: l.vendor, rate: l.rate ?? '' };
-    else delete n[l.sourceLineId];
+    if (on) {
+      const best = (l.quotes ?? []).filter(q => !q.expired).sort((a, b) => num(a.quotedRate) - num(b.quotedRate))[0];
+      n[l.sourceLineId] = {
+        qty: l.pendingOrder,
+        vendor: l.vendor ?? (best ? { id: best.vendor.id, code: best.vendor.code, name: best.vendor.name } : null),
+        rate: l.rate ?? best?.quotedRate ?? '',
+      };
+    } else delete n[l.sourceLineId];
     return n;
   });
   const set = (id: string, patch: Partial<Pick>) => setPicks(p => (p[id] ? { ...p, [id]: { ...p[id]!, ...patch } } : p));
@@ -412,10 +418,22 @@ export function OrderPage() {
                         </td>
                         <td className="px-3 py-2.5 text-fg-muted">{l.location.name}</td>
                         <td className="min-w-[10rem] px-3 py-2.5">
-                          {pk && l.sourceKind === 'indent' ? (
+                          {pk ? (
                             <MasterPicker masterKey="vendor" value={pk.vendor} onChange={v => set(l.sourceLineId, { vendor: v })} ariaLabel={t('order.vendor')} placeholder={t('order.vendor')} compact testId={`order-vendor-${k}`} />
+                          ) : l.vendor ? (
+                            <span className="text-fg-muted">{l.vendor.name}</span>
+                          ) : (l.quotes ?? []).length > 0 ? (
+                            <div className="space-y-0.5">
+                              {(l.quotes ?? []).slice(0, 2).map(q => (
+                                <p key={q.quoteId} className={cn('text-xs', q.expired && 'line-through text-fg-subtle')}>
+                                  <span className="font-medium">{q.vendor.name}</span>
+                                  <span className="text-fg-muted"> · {fmtRate(q.quotedRate, currency)}</span>
+                                </p>
+                              ))}
+                              {(l.quotes ?? []).length > 2 && <p className="text-xs text-fg-subtle">+{(l.quotes ?? []).length - 2} more</p>}
+                            </div>
                           ) : (
-                            <span className="text-fg-muted">{l.vendor?.name ?? '—'}</span>
+                            <span className="text-fg-subtle text-xs">No quotes</span>
                           )}
                         </td>
                         <td className="min-w-[7rem] px-3 py-2.5">

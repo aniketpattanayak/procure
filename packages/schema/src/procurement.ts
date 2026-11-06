@@ -91,6 +91,7 @@ export interface OrderableLine {
   sourceLineId: string; sourceKind: 'selection' | 'indent'; indentLineId: string; indentNumber: string | null; selectionNumber: string | null; lineNo: number;
   item: { id: string; code: string; name: string } | null; uom: string | null;
   vendor: { id: string; code: string; name: string } | null; rate: string | null;
+  quotes: { quoteId: string; vendor: { id: string; code: string; name: string }; quotedRate: string; leadTimeDays: number | null; validUntil: string | null; expired: boolean }[];
   location: { id: string; name: string }; requiredDate: string | null; pendingOrder: string;
 }
 
